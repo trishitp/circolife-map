@@ -1,0 +1,23 @@
+{
+  "name": "circolife-map-server",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "migrate": "node src/migrate.js",
+    "load:pincodes": "node scripts/load_pincodes.js data/pincodes.csv",
+    "sync": "node src/sync/sync.js",
+    "sync:meeting-coords": "node scripts/refresh_meeting_coords.js",
+    "sync:assets": "node scripts/sync_assets_only.js",
+    "zoho:token": "node scripts/zoho_token.js",
+    "zoho:oauth": "node scripts/zoho_oauth.js",
+    "regeocode": "node src/regeocode.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.12.0",
+    "dotenv": "^16.4.5",
+    "csv-parse": "^5.5.6",
+    "p-limit": "^6.1.0"
+  }
+}
