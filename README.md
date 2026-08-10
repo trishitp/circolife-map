@@ -77,7 +77,7 @@ cd ../web && npm i && npm run dev
 and street geocoding misses. Without it, the pipeline falls through to territory
 centroids only.
 
-Open http://localhost:5173 — sign in with `APP_PASSWORD`. Use **Admin → Clear failed + re-geocode** after first sync, then **Rebuild discrepancies** (or full sync, which rebuilds automatically).
+Open http://localhost:4040 — sign in with `APP_PASSWORD`. Use **Admin → Clear failed + re-geocode** after first sync, then **Rebuild discrepancies** (or full sync, which rebuilds automatically).
 
 Optional: `npm run regeocode` in `server/`.
 
