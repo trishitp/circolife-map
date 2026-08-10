@@ -1,11 +1,54 @@
+# Local dev (DB only):  docker compose up -d db
+# Full stack deploy:    docker compose up -d --build
+# First data load:       docker compose exec app npm run sync
+
 services:
   db:
     image: postgis/postgis:16-3.4
     environment:
       POSTGRES_DB: circomap
       POSTGRES_USER: circomap
-      POSTGRES_PASSWORD: circomap
-    ports: ["5432:5432"]
-    volumes: [dbdata:/var/lib/postgresql/data]
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-circomap}
+    ports:
+      - "${POSTGRES_PUBLISH_PORT:-5432}:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U circomap -d circomap"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${APP_PUBLISH_PORT:-4000}:4000"
+    env_file:
+      - server/.env
+    environment:
+      DATABASE_URL: postgres://circomap:${POSTGRES_PASSWORD:-circomap}@db:5432/circomap
+      NODE_ENV: production
+      WEB_DIST: /app/web/dist
+      PORT: "4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
 volumes:
   dbdata: {}

@@ -1,0 +1,11 @@
+.git
+.gitignore
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+web/dist
+**/*.log
+.zoho-token-cache.json
+README.md
+.cursor
