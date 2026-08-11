@@ -3,6 +3,7 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.production.example
 .zoho-token-cache.json
 *.log
 .DS_Store

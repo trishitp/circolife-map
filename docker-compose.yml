@@ -1,9 +1,14 @@
-# Local dev (DB only):  docker compose up -d db
-# Full stack deploy:    docker compose up -d --build   → http://localhost:4040
-# First data load:       docker compose exec app npm run sync
+# Server (shared Postgres):  set POSTGRES_DOCKER_NETWORK in .env, then:
+#   docker compose up -d --build   → http://localhost:4040
+# First data load:  docker compose exec app npm run sync
+#
+# Local PostGIS sidecar:  docker compose --profile local up -d
+#   (set DATABASE_URL host to `db`, and POSTGRES_DOCKER_NETWORK to any
+#    existing/created network name — e.g. docker network create circolife-maps-net)
 
 services:
   db:
+    profiles: ["local"]
     image: postgis/postgis:16-3.4
     environment:
       POSTGRES_DB: circomap
@@ -19,24 +24,27 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    networks:
+      - default
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: circolife-map-app
     ports:
       - "${APP_PUBLISH_PORT:-4040}:4000"
     env_file:
       - server/.env
     environment:
-      DATABASE_URL: postgres://circomap:${POSTGRES_PASSWORD:-circomap}@db:5432/circomap
+      # DATABASE_URL comes from server/.env (e.g. host circolife-ai-postgres)
       NODE_ENV: production
       WEB_DIST: /app/web/dist
       PORT: "4000"
-    depends_on:
-      db:
-        condition: service_healthy
     restart: unless-stopped
+    networks:
+      - default
+      - postgres_net
     healthcheck:
       test:
         [
@@ -50,5 +58,10 @@ services:
       retries: 3
       start_period: 120s
 
+networks:
+  postgres_net:
+    external: true
+    name: ${POSTGRES_DOCKER_NETWORK}
+
 volumes:
-  dbdata: {}
+  dbdata:

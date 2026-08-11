@@ -67,8 +67,11 @@ Gaps = cannot plot. Discrepancies = can plot (or partially resolve) but sources 
 ## Run (local)
 
 ```bash
-docker compose up -d db   # or local Postgres+PostGIS
+# Optional local PostGIS (profile). Or use any Postgres+PostGIS and point DATABASE_URL at it.
+docker network create circolife-maps-net   # once; set POSTGRES_DOCKER_NETWORK=circolife-maps-net in .env
+docker compose --profile local up -d db
 cd server && cp .env.example .env  # Zoho + GOOGLE_MAPS_API_KEY + APP_PASSWORD
+# Local non-Docker API: DATABASE_URL=...@localhost:5432/circomap
 npm i && npm run migrate && npm run load:pincodes && npm run sync && npm run dev
 cd ../web && npm i && npm run dev
 ```
@@ -81,28 +84,84 @@ Open http://localhost:4040 — sign in with `APP_PASSWORD`. Use **Admin → Clea
 
 Optional: `npm run regeocode` in `server/`.
 
-## Production deploy
+## Production deploy (Docker, shared Postgres)
+
+Default on the Circolife server: **app container only**, new database inside existing `circolife-ai-postgres` (other DBs untouched). Requires **PostGIS** in that Postgres instance. UI on host port **4040**.
+
+### 1. Discover network + create DB
 
 ```bash
-# 1. Build SPA
-cd web && npm ci && npm run build
+# Network name the map app must join
+docker inspect circolife-ai-postgres -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'
 
-# 2. server/.env
-# NODE_ENV=production
-# APP_PASSWORD=...
-# DATABASE_URL=...
-# DATABASE_SSL=true          # managed Postgres
-# CORS_ORIGINS=https://maps.example.com
-# GOOGLE_MAPS_API_KEY=...    # restrict in GCP by referrer + server IP
-# WEB_DIST=/path/to/web/dist # optional; auto-detects ../web/dist
-
-# 3. Start API (serves SPA when dist present)
-cd ../server && npm ci && npm run migrate && npm start
+# Superuser is usually the image default (often `postgres`) — check the AI stack .env if this fails.
+# Pick a strong password for circomap and keep it for DATABASE_URL.
+docker exec -it circolife-ai-postgres psql -U postgres -d postgres -c \
+  "CREATE USER circomap WITH PASSWORD 'CHANGE_ME';"
+docker exec -it circolife-ai-postgres psql -U postgres -d postgres -c \
+  "CREATE DATABASE circomap OWNER circomap;"
 ```
 
+### 2. Install PostGIS (once per container lifetime)
+
+`pgvector/pgvector:pg16` does not ship PostGIS. Install into the running container (re-run after that container is recreated from a non-PostGIS image):
+
+```bash
+docker exec -u root -it circolife-ai-postgres bash -c \
+  "apt-get update && apt-get install -y postgresql-16-postgis-3 && rm -rf /var/lib/apt/lists/*"
+docker exec -it circolife-ai-postgres psql -U postgres -d circomap -c \
+  "CREATE EXTENSION IF NOT EXISTS postgis;"
+docker exec -it circolife-ai-postgres psql -U postgres -d circomap -c \
+  "GRANT ALL ON SCHEMA public TO circomap;"
+docker exec -it circolife-ai-postgres psql -U postgres -d circomap -c \
+  "ALTER DATABASE circomap OWNER TO circomap;"
+```
+
+### 3. Env on the server
+
+Root `.env` (Compose variable substitution):
+
+```bash
+APP_PUBLISH_PORT=4040
+POSTGRES_DOCKER_NETWORK=<name from step 1>
+```
+
+`server/.env` (loaded into the app container):
+
+```bash
+DATABASE_URL=postgres://circomap:CHANGE_ME@circolife-ai-postgres:5432/circomap
+NODE_ENV=production
+APP_PASSWORD=...
+SESSION_SECRET=...
+GOOGLE_MAPS_API_KEY=...
+# Zoho credentials…
+# CORS_ORIGINS=https://maps.yourdomain.com   # if the browser uses a public origin
+```
+
+Hostname `circolife-ai-postgres` resolves only when the app shares that container’s Docker network (`POSTGRES_DOCKER_NETWORK`).
+
+### 4. Build, start, sync
+
+```bash
+cd ~/circolife-map
+docker compose up -d --build
+curl -s http://127.0.0.1:4040/healthz
+docker compose exec app npm run sync   # first Zoho load — can take a while
+```
+
+Open `http://<server>:4040` and sign in with `APP_PASSWORD`. Entrypoint runs migrate + pincode seed automatically.
+
 - Health: `GET /healthz` → `{ ok: true }` (DB ping)
-- Cron: `cd server && npm run sync` daily (or Admin → Sync)
+- Cron: `docker compose exec app npm run sync` daily (or Admin → Sync)
 - Google Cloud: enable **Geocoding**, **Map Tiles**, **Directions** (Routes optional). Restrict the browser key by HTTP referrer.
+
+### Alternative: bare Node (no Docker app)
+
+```bash
+cd web && npm ci && npm run build
+# server/.env with DATABASE_URL / NODE_ENV=production / APP_PASSWORD / …
+cd ../server && npm ci && npm run migrate && npm start
+```
 
 ## Filters (Map)
 
