@@ -151,6 +151,11 @@ export const saveAdminUsageRates = (body) =>
   jfetch('/api/admin/usage/rates', {
     method: 'POST', body: JSON.stringify(body),
   });
+export const fetchMapMarkerStyle = () => jfetch('/api/admin/map-style');
+export const saveMapMarkerStyle = (style) =>
+  jfetch('/api/admin/map-style', {
+    method: 'POST', body: JSON.stringify({ style }),
+  });
 export const reportClientUsage = (sku, units = 1) =>
   jfetch('/api/meta/usage', {
     method: 'POST', body: JSON.stringify({ sku, units }),

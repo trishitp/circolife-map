@@ -6,7 +6,8 @@ import { fetchLayer, fetchLayerFeature, fetchCoverageGrid } from '../lib/api';
 import { onSelection } from '../lib/selection';
 import { resolveBasemapStyle, LABEL_FONTS_BY_STYLE, attachGoogleAttribution } from '../lib/basemap';
 import { INDIA_BOUNDS, INDIA_CENTER, INDIA_DEFAULT_ZOOM, INDIA_MIN_ZOOM } from '../lib/mapBounds';
-import { loadAcIcons } from '../lib/acIcon';
+import { loadMapIcons } from '../lib/acIcon';
+import { normalizeMarkerStyle } from '../lib/mapMarkerStyle';
 
 maplibregl.setWorkerUrl('/maplibre-worker.js');
 
@@ -25,6 +26,64 @@ const abbr = (n) => {
   return String(n);
 };
 
+function hexRgb(hex) {
+  const n = hex.replace('#', '');
+  return [
+    parseInt(n.slice(0, 2), 16),
+    parseInt(n.slice(2, 4), 16),
+    parseInt(n.slice(4, 6), 16),
+  ].join(',');
+}
+
+function heatPaint(color) {
+  const rgb = hexRgb(color);
+  return {
+    'heatmap-weight': [
+      'match', ['get', 'precision'],
+      'territory', 0,
+      'pincode', 0.16,
+      'inherited', 0.4,
+      'approx', 0.7,
+      1,
+    ],
+    'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 4, 0.5, 8, 0.85, 13, 1.15],
+    'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 4, 18, 8, 24, 12, 30],
+    'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0.72, 10, 0.42, 13, 0.1, 15, 0],
+    'heatmap-color': [
+      'interpolate', ['linear'], ['heatmap-density'],
+      0, 'rgba(0,0,0,0)',
+      0.12, `rgba(${rgb},0.2)`,
+      0.35, `rgba(${rgb},0.45)`,
+      0.65, `rgba(${rgb},0.75)`,
+      1, `rgba(${rgb},0.95)`,
+    ],
+  };
+}
+
+const PIN_OPACITY = [
+  'match', ['get', 'precision'],
+  'pincode', 0.55, 'territory', 0.4, 'inherited', 0.75, 1,
+];
+
+function applyMarkerStyle(m, style) {
+  const s = normalizeMarkerStyle(style);
+  const showHeat = s === 'pins-heat' || s === 'heat';
+  const showClusters = s === 'clusters';
+  const vis = (on) => (on ? 'visible' : 'none');
+  for (const layer of Object.keys(LAYER_COLORS)) {
+    if (m.getLayer(`${layer}-heat`)) {
+      m.setLayoutProperty(`${layer}-heat`, 'visibility', vis(showHeat));
+    }
+    if (m.getLayer(`${layer}-pts`)) {
+      m.setLayoutProperty(`${layer}-pts`, 'visibility', 'visible');
+      try { m.setLayerZoomRange(`${layer}-pts`, s === 'heat' ? 11 : 0, 24); } catch { /* */ }
+    }
+    for (const id of [`${layer}-halo`, `${layer}-clusters`, `${layer}-cluster-icon`]) {
+      if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', vis(showClusters));
+    }
+  }
+}
+
 function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
   const srcId = layer;
   if (!m.getSource(srcId)) {
@@ -33,11 +92,20 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
 
   const add = (id, spec) => { if (!m.getLayer(id)) m.addLayer(spec); };
 
+  add(`${layer}-heat`, {
+    id: `${layer}-heat`,
+    type: 'heatmap',
+    source: srcId,
+    filter: ['!', ['has', 'point_count']],
+    paint: heatPaint(color),
+  });
+
   add(`${layer}-halo`, {
     id: `${layer}-halo`,
     type: 'circle',
     source: srcId,
     filter: ['has', 'point_count'],
+    layout: { visibility: 'none' },
     paint: {
       'circle-color': color,
       'circle-opacity': 0.18,
@@ -51,6 +119,7 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
     type: 'circle',
     source: srcId,
     filter: ['has', 'point_count'],
+    layout: { visibility: 'none' },
     paint: {
       'circle-color': color,
       'circle-opacity': 0.95,
@@ -60,41 +129,20 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
     },
   });
 
-  // Note: symbol/count labels are intentionally omitted — glyph/symbol layers
-  // corrupt GeoJSON source updates with the Vite MapLibre worker setup.
-
-  add(`${layer}-pt-halo`, {
-    id: `${layer}-pt-halo`,
-    type: 'circle',
-    source: srcId,
-    filter: ['!', ['has', 'point_count']],
-    paint: {
-      'circle-color': color,
-      'circle-opacity': 0.2,
-      'circle-radius': 14,
-      'circle-blur': 0.4,
-    },
-  });
-
   if (layer === 'assets') {
     add(`${layer}-pts`, {
       id: `${layer}-pts`,
       type: 'symbol',
       source: srcId,
-      filter: ['!', ['has', 'point_count']],
       layout: {
         'icon-image': 'ac-pin',
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 5, 0.38, 11, 0.52, 15, 0.72],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 4, 0.28, 8, 0.38, 12, 0.52, 16, 0.7],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-anchor': 'center',
       },
-      paint: {
-        'icon-opacity': [
-          'match', ['get', 'precision'],
-          'pincode', 0.5, 'territory', 0.5, 'inherited', 0.75, 1,
-        ],
-      },
+      filter: ['!', ['has', 'point_count']],
+      paint: { 'icon-opacity': PIN_OPACITY },
     });
     add(`${layer}-cluster-icon`, {
       id: `${layer}-cluster-icon`,
@@ -102,6 +150,7 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
       source: srcId,
       filter: ['has', 'point_count'],
       layout: {
+        visibility: 'none',
         'icon-image': 'ac-glyph',
         'icon-size': ['step', ['get', 'point_count'], 0.32, 25, 0.38, 100, 0.44],
         'icon-allow-overlap': true,
@@ -111,19 +160,17 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
   } else {
     add(`${layer}-pts`, {
       id: `${layer}-pts`,
-      type: 'circle',
+      type: 'symbol',
       source: srcId,
-      filter: ['!', ['has', 'point_count']],
-      paint: {
-        'circle-color': color,
-        'circle-opacity': [
-          'match', ['get', 'precision'],
-          'pincode', 0.32, 'inherited', 0.62, 'approx', 0.85, 'geocoded', 0.92, 0.97,
-        ],
-        'circle-stroke-width': ['match', ['get', 'precision'], 'pincode', 2.4, 1.75],
-        'circle-stroke-color': ['match', ['get', 'precision'], 'pincode', color, STROKE],
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 5, 11, 7, 15, 9],
+      layout: {
+        'icon-image': `drop-pin-${layer}`,
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 4, 0.32, 8, 0.42, 12, 0.58, 16, 0.78],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-anchor': 'bottom',
       },
+      filter: ['!', ['has', 'point_count']],
+      paint: { 'icon-opacity': PIN_OPACITY },
     });
   }
 
@@ -138,6 +185,10 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
       onSelect({ ...f.properties, _layer: layer, lng, lat });
       m.easeTo({ center: f.geometry.coordinates, offset: [0, -40], duration: 450 });
     });
+    const on = () => { m.getCanvas().style.cursor = 'pointer'; };
+    const off = () => { m.getCanvas().style.cursor = ''; };
+    m.on('mouseenter', `${layer}-pts`, on);
+    m.on('mouseleave', `${layer}-pts`, off);
     m.on('click', `${layer}-clusters`, (e) => {
       const f = e.features?.[0];
       if (!f) return;
@@ -149,16 +200,8 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
           zoom = Math.min(index.getClusterExpansionZoom(Number(cid)), 16);
         } catch { /* keep stepped zoom */ }
       }
-      m.easeTo({
-        center: f.geometry.coordinates,
-        zoom,
-        duration: 500,
-      });
+      m.easeTo({ center: f.geometry.coordinates, zoom, duration: 500 });
     });
-    const on = () => { m.getCanvas().style.cursor = 'pointer'; };
-    const off = () => { m.getCanvas().style.cursor = ''; };
-    m.on('mouseenter', `${layer}-pts`, on);
-    m.on('mouseleave', `${layer}-pts`, off);
     m.on('mouseenter', `${layer}-clusters`, on);
     m.on('mouseleave', `${layer}-clusters`, off);
   }
@@ -268,7 +311,7 @@ function ensureCoverage(m, wired, onSelect) {
 
 export default function MapView({
   active, filters, onSelect, onLoading, focusRequest, onFocusHandled, visible,
-  onMapIssue, insight, onInsight, flyRequest, onFlyHandled,
+  onMapIssue, insight, onInsight, flyRequest, onFlyHandled, markerStyle,
 }) {
   const el = useRef(null);
   const map = useRef(null);
@@ -276,9 +319,10 @@ export default function MapView({
   const abortRef = useRef(null);
   const selectedId = useRef(null);
   const ready = useRef(false);
+  const featsRef = useRef({});
   const indexes = useRef({});
-  const fonts = useRef(LABEL_FONTS_BY_STYLE.voyager);
   const zoomRaf = useRef(null);
+  const fonts = useRef(LABEL_FONTS_BY_STYLE.voyager);
   const activeRef = useRef(active);
   const filtersRef = useRef(filters);
   const onSelectRef = useRef(onSelect);
@@ -288,6 +332,7 @@ export default function MapView({
   const insightRef = useRef(insight);
   const onInsightRef = useRef(onInsight);
   const onFlyHandledRef = useRef(onFlyHandled);
+  const styleRef = useRef(normalizeMarkerStyle(markerStyle));
   activeRef.current = active;
   filtersRef.current = filters;
   onSelectRef.current = onSelect;
@@ -297,19 +342,32 @@ export default function MapView({
   insightRef.current = insight;
   onInsightRef.current = onInsight;
   onFlyHandledRef.current = onFlyHandled;
+  styleRef.current = normalizeMarkerStyle(markerStyle);
 
-  const pushClusters = () => {
+  const pushDisplay = () => {
     const m = map.current;
     if (!m || !ready.current) return;
+    const clustered = styleRef.current === 'clusters';
     const z = Math.max(0, Math.floor(m.getZoom()));
-    const b = m.getBounds();
-    const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    let bbox = null;
+    if (clustered) {
+      const b = m.getBounds();
+      bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+    }
     for (const layer of Object.keys(LAYER_COLORS)) {
-      if (!activeRef.current.has(layer) || !indexes.current[layer]) {
-        m.getSource(layer)?.setData({ type: 'FeatureCollection', features: [] });
+      const raw = activeRef.current.has(layer) ? (featsRef.current[layer] || []) : [];
+      if (!clustered || !raw.length) {
+        indexes.current[layer] = null;
+        m.getSource(layer)?.setData({ type: 'FeatureCollection', features: raw });
         continue;
       }
-      const features = indexes.current[layer].getClusters(bbox, z).map((f) => {
+      let index = indexes.current[layer];
+      if (!index) {
+        index = new Supercluster({ radius: 58, maxZoom: 15, minPoints: 2 });
+        index.load(raw);
+        indexes.current[layer] = index;
+      }
+      const features = index.getClusters(bbox, z).map((f) => {
         if (!f.properties?.cluster) return f;
         return {
           type: 'Feature',
@@ -345,6 +403,7 @@ export default function MapView({
         const layers = Object.keys(LAYER_COLORS);
         await Promise.all(layers.map(async (layer) => {
           if (!activeRef.current.has(layer)) {
+            featsRef.current[layer] = [];
             indexes.current[layer] = null;
             m.getSource(layer)?.setData({ type: 'FeatureCollection', features: [] });
             return;
@@ -355,12 +414,12 @@ export default function MapView({
             if (gj?.meta?.truncated) truncLayers.push(layer);
             const feats = (gj.features || []).filter((f) =>
               f?.geometry?.type === 'Point' && Array.isArray(f.geometry.coordinates));
-            const index = new Supercluster({ radius: 58, maxZoom: 15, minPoints: 2 });
-            index.load(feats);
-            indexes.current[layer] = index;
+            featsRef.current[layer] = feats;
+            indexes.current[layer] = null;
           } catch (e) {
             if (e?.name === 'AbortError' || ac.signal.aborted) return;
             console.warn(e);
+            featsRef.current[layer] = [];
             indexes.current[layer] = null;
             m.getSource(layer)?.setData({ type: 'FeatureCollection', features: [] });
             loadIssues.push(`${layer}: ${e.message || 'load failed'}`);
@@ -414,7 +473,7 @@ export default function MapView({
           onInsightRef.current?.({ top: [], ghosts: [], summary: null });
         }
         if (!ac.signal.aborted) {
-          pushClusters();
+          pushDisplay();
           if (loadIssues.length) {
             onMapIssueRef.current?.({
               type: 'error',
@@ -476,14 +535,15 @@ export default function MapView({
       const wire = async () => {
         if (cancelled) return;
         try {
-          await loadAcIcons(m);
+          await loadMapIcons(m);
         } catch (e) {
-          console.warn('[map] AC icon', e);
+          console.warn('[map] pin icons', e);
         }
         ensureCoverage(m, wired, (p) => onSelectRef.current?.(p));
         for (const [layer, color] of Object.entries(LAYER_COLORS)) {
           ensureOverlay(m, layer, color, wired, (p) => onSelectRef.current?.(p), selectedId, indexes);
         }
+        applyMarkerStyle(m, styleRef.current);
         if (!m.getSource('selection')) {
           m.addSource('selection', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
           m.addLayer({
@@ -508,10 +568,11 @@ export default function MapView({
           });
           m.on('moveend', refresh);
           m.on('zoom', () => {
+            if (styleRef.current !== 'clusters') return;
             if (zoomRaf.current) return;
             zoomRaf.current = requestAnimationFrame(() => {
               zoomRaf.current = null;
-              pushClusters();
+              pushDisplay();
             });
           });
         }
@@ -558,6 +619,14 @@ export default function MapView({
   }, []);
 
   useEffect(() => { refresh(); }, [active, filters, insight?.mode, insight?.days]); // eslint-disable-line
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready.current) return;
+    applyMarkerStyle(m, markerStyle);
+    indexes.current = {};
+    pushDisplay();
+  }, [markerStyle]); // eslint-disable-line
 
   // Resize when returning to the Map tab (shell was display:none / visibility hidden)
   useEffect(() => {

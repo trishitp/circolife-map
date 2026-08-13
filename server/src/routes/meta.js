@@ -4,6 +4,7 @@ import { cfg } from '../config.js';
 import { TERRITORY_GROUP_KEYS } from '../filters/mapFilters.js';
 import { syncUsers } from '../sync/sync.js';
 import { recordUsage, isClientSku } from '../usage/meter.js';
+import { getMapMarkerStyle } from '../mapStyle.js';
 
 export const meta = Router();
 
@@ -227,6 +228,7 @@ meta.get('/filters', async (_req, res) => {
       userStatuses: ['active', 'inactive'],
       statuses: statuses.rows.map((r) => r.status),
       precisions: precisions.rows.map((r) => r.precision),
+      markerStyle: await getMapMarkerStyle(),
     });
   } catch (e) {
     console.error('[meta/filters]', e);

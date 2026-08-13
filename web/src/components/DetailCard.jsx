@@ -13,6 +13,8 @@ const PRECISION_COPY = {
 
 const ADDRESS_SOURCE_COPY = {
   fsm: 'FSM install address',
+  fsm_service: 'FSM service address',
+  fsm_billing: 'FSM billing address',
   shipping: 'Account shipping address',
   billing: 'Account billing address',
   account: 'Linked account location',
@@ -65,9 +67,14 @@ export default function DetailCard({ p, onClose }) {
     layer === 'assets' && p.mac && ['MAC', p.mac],
     layer === 'assets' && p.acType && ['AC type', p.acType],
     layer === 'assets' && p.tonnage && ['Tonnage', p.tonnage],
+    p.address && ['Address', p.address],
     layer === 'assets' && p.addressSource && [
       'Address source',
       ADDRESS_SOURCE_COPY[p.addressSource] || p.addressSource,
+    ],
+    layer === 'assets' && (p.accountName || p.accountId) && [
+      'Account',
+      p.accountName || p.accountId,
     ],
     p.owner && ['Agent', p.owner],
     p.territory && ['Territory', p.territory],
@@ -113,10 +120,10 @@ export default function DetailCard({ p, onClose }) {
               : 'Visited relative to lead density'}
         </span>
       )}
-      {p.crmUrl && (
+      {(p.crmUrl || p.accountCrmUrl) && (
         <div>
-          <a className="cta" href={p.crmUrl} target="_blank" rel="noreferrer">
-            Open in CRM →
+          <a className="cta" href={p.crmUrl || p.accountCrmUrl} target="_blank" rel="noreferrer">
+            {p.crmUrl ? 'Open in CRM →' : 'Open account in CRM →'}
           </a>
         </div>
       )}

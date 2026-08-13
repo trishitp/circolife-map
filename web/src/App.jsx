@@ -24,6 +24,7 @@ import {
   fetchStats, fetchFilters, fetchAuthStatus, fetchMe, login, logout, getAppToken,
   setAppToken,
 } from './lib/api';
+import { DEFAULT_MARKER_STYLE, normalizeMarkerStyle } from './lib/mapMarkerStyle';
 
 const TABS = [
   { id: 'map', label: 'Map' },
@@ -92,6 +93,7 @@ export default function App() {
   const [legendOpen, setLegendOpen] = useState(() => (
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 901px)').matches : true
   ));
+  const [markerStyle, setMarkerStyle] = useState(DEFAULT_MARKER_STYLE);
   const [flyRequest, setFlyRequest] = useState(null);
   const [me, setMe] = useState(null);
   const [loginError, setLoginError] = useState(null);
@@ -153,6 +155,7 @@ export default function App() {
           statuses: o.statuses || [],
           precisions: o.precisions || [],
         });
+        if (o.markerStyle) setMarkerStyle(normalizeMarkerStyle(o.markerStyle));
       })
       .catch((e) => {
         setOptionsError(e.message || 'Could not load filter options');
@@ -337,6 +340,9 @@ export default function App() {
             <div className="map-tool-sheet map-tool-sheet-legend" role="dialog" aria-label="Legend">
               {insightMode === 'off' ? (
                 <>
+                  <strong>Reach</strong>
+                  <div className="legend-row"><span className="legend-swatch heat-cool" /> Heat = density of real locations</div>
+                  <div className="legend-row"><span className="legend-swatch exact" /> Pins stay on the actual spot</div>
                   <strong>Precision</strong>
                   <div className="legend-row"><span className="legend-swatch exact" /> Exact / geocoded</div>
                   <div className="legend-row"><span className="legend-swatch approx" /> Check-in (~1 km)</div>
@@ -421,6 +427,9 @@ export default function App() {
               <div className="map-legend-body">
                 {insightMode === 'off' ? (
                   <>
+                    <strong>Reach</strong>
+                    <div className="legend-row"><span className="legend-swatch heat-cool" /> Heat = density of real locations</div>
+                    <div className="legend-row"><span className="legend-swatch exact" /> Pins stay on the actual spot</div>
                     <strong>Precision</strong>
                     <div className="legend-row"><span className="legend-swatch exact" /> Exact / geocoded</div>
                     <div className="legend-row"><span className="legend-swatch approx" /> Check-in (~1 km)</div>
@@ -499,6 +508,7 @@ export default function App() {
           onInsight={setInsightData}
           flyRequest={flyRequest}
           onFlyHandled={() => setFlyRequest(null)}
+          markerStyle={markerStyle}
         />
 
         <OpportunityPanel
@@ -521,7 +531,9 @@ export default function App() {
       {tab === 'routes' && <RoutesPanel options={options} />}
       {tab === 'disc' && <DiscrepanciesPanel onFocusMap={focusFromGap} />}
       {tab === 'gaps' && <GapsPanel onFocusMap={focusFromGap} />}
-      {tab === 'admin' && me?.admin && <AdminPanel me={me} />}
+      {tab === 'admin' && me?.admin && (
+        <AdminPanel me={me} markerStyle={markerStyle} onMarkerStyle={setMarkerStyle} />
+      )}
       {tab === 'help' && <HelpGuide onOpenTab={setTab} isAdmin={Boolean(me?.admin)} />}
 
       <MobileNav

@@ -8,7 +8,17 @@ export const layers = Router();
 
 const LAYERS = new Set(['leads', 'accounts', 'meetings', 'assets']);
 
+const POINT_COLS = [
+  'source_id', 'title', 'owner_name', 'territory', 'status', 'precision',
+  'record_ts', 'crm_url', 'extra', 'lat', 'lng', 'address_raw', 'pincode',
+];
+const POINT_SELECT = POINT_COLS.join(', ');
+const POINT_SELECT_P = POINT_COLS.map((c) => `p.${c}`).join(', ');
+
 function featureFromRow(r) {
+  const extra = r.extra && typeof r.extra === 'object' ? r.extra : {};
+  const accountName = r.account_title || extra.accountName || extra.fsmCompanyName || null;
+  const accountCrmUrl = r.account_crm_url || extra.accountCrmUrl || null;
   return {
     type: 'Feature',
     geometry: { type: 'Point', coordinates: [r.lng, r.lat] },
@@ -21,10 +31,20 @@ function featureFromRow(r) {
       precision: r.precision,
       ts: r.record_ts,
       crmUrl: r.crm_url,
-      ...(r.extra && typeof r.extra === 'object' ? r.extra : {}),
+      ...extra,
+      address: r.address_raw || extra.address || null,
+      pincode: r.pincode || extra.pincode || null,
+      ...(accountName ? { accountName } : {}),
+      ...(accountCrmUrl ? { accountCrmUrl } : {}),
     },
   };
 }
+
+const ACCOUNT_JOIN = `
+LEFT JOIN map_points acc
+  ON acc.layer = 'accounts'
+ AND NULLIF(p.extra->>'accountId', '') IS NOT NULL
+ AND acc.source_id = p.extra->>'accountId'`;
 
 function buildFilterWheres(req, layer, params) {
   const wheres = [
@@ -44,10 +64,12 @@ layers.get('/:layer/feature/:id', async (req, res) => {
     if (!id) return res.status(400).json({ error: 'id required' });
 
     const { rows } = await q(`
-      SELECT source_id, title, owner_name, territory, status, precision,
-             record_ts, crm_url, extra, lat, lng
-      FROM map_points
-      WHERE layer = $1 AND source_id = $2 AND geom IS NOT NULL
+      SELECT ${POINT_SELECT_P},
+             acc.title AS account_title,
+             acc.crm_url AS account_crm_url
+      FROM map_points p
+      ${ACCOUNT_JOIN}
+      WHERE p.layer = $1 AND p.source_id = $2 AND p.geom IS NOT NULL
       LIMIT 1`, [layer, id]);
 
     if (!rows.length) return res.status(404).json({ error: 'point not found or unplottable' });
@@ -75,12 +97,17 @@ layers.get('/:layer', async (req, res) => {
 
     // Fetch limit+1 so we can report truncation without a full COUNT.
     const { rows } = await q(`
-      SELECT source_id, title, owner_name, territory, status, precision,
-             record_ts, crm_url, extra, lat, lng
-      FROM map_points
-      WHERE ${wheres.join(' AND ')}
-      ORDER BY record_ts DESC NULLS LAST, source_id
-      LIMIT ${limit + 1}`, params);
+      SELECT ${POINT_SELECT_P},
+             acc.title AS account_title,
+             acc.crm_url AS account_crm_url
+      FROM (
+        SELECT ${POINT_SELECT}
+        FROM map_points
+        WHERE ${wheres.join(' AND ')}
+        ORDER BY record_ts DESC NULLS LAST, source_id
+        LIMIT ${limit + 1}
+      ) p
+      ${ACCOUNT_JOIN}`, params);
 
     const truncated = rows.length > limit;
     const slice = truncated ? rows.slice(0, limit) : rows;

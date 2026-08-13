@@ -1,6 +1,13 @@
 const GREEN = '#6BB35A';
 const CREAM = '#FFFCFA';
 
+export const LAYER_PIN_COLORS = {
+  leads: '#A14996',
+  accounts: '#2E1F40',
+  meetings: '#5FA9C6',
+  assets: GREEN,
+};
+
 function pinSvg(size) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64">
     <circle cx="32" cy="32" r="30" fill="${GREEN}" stroke="${CREAM}" stroke-width="3"/>
@@ -18,16 +25,24 @@ function glyphSvg(size) {
   </svg>`;
 }
 
-function svgToImageData(svg, size) {
+function dropPinSvg(color, w, h) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 64 84">
+    <path d="M32 4C17.8 4 6.5 16.4 6.5 31.6 6.5 50.2 32 80 32 80s25.5-29.8 25.5-48.4C57.5 16.4 46.2 4 32 4z"
+      fill="${color}" stroke="${CREAM}" stroke-width="4" stroke-linejoin="round"/>
+    <circle cx="32" cy="31" r="11" fill="${CREAM}"/>
+  </svg>`;
+}
+
+function svgToImageData(svg, width, height = width) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size;
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, size, size);
-      resolve(ctx.getImageData(0, 0, size, size));
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(ctx.getImageData(0, 0, width, height));
       img.src = '';
     };
     img.onerror = reject;
@@ -36,8 +51,14 @@ function svgToImageData(svg, size) {
 }
 
 export async function loadAcIcons(map) {
+  return loadMapIcons(map);
+}
+
+export async function loadMapIcons(map) {
   if (!map) return;
   const size = 128;
+  const pinW = 80;
+  const pinH = 104;
   const jobs = [];
   if (!map.hasImage('ac-pin')) {
     jobs.push(svgToImageData(pinSvg(size), size).then((data) => {
@@ -47,6 +68,14 @@ export async function loadAcIcons(map) {
   if (!map.hasImage('ac-glyph')) {
     jobs.push(svgToImageData(glyphSvg(size), size).then((data) => {
       if (!map.hasImage('ac-glyph')) map.addImage('ac-glyph', data, { pixelRatio: 2 });
+    }));
+  }
+  for (const [layer, color] of Object.entries(LAYER_PIN_COLORS)) {
+    if (layer === 'assets') continue;
+    const id = `drop-pin-${layer}`;
+    if (map.hasImage(id)) continue;
+    jobs.push(svgToImageData(dropPinSvg(color, pinW, pinH), pinW, pinH).then((data) => {
+      if (!map.hasImage(id)) map.addImage(id, data, { pixelRatio: 2 });
     }));
   }
   await Promise.all(jobs);

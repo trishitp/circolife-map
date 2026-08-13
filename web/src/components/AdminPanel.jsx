@@ -3,16 +3,17 @@ import {
   fetchAdminDashboard, fetchAdminJob, triggerSync, triggerAssetsSync, triggerRegeocode,
   clearFailedCache, clearAllCache, refreshTerritories, overridePoint,
   bulkOverride, searchPoints, fetchCacheSample, triggerRebuildDiscrepancies,
-  fetchZohoStatus, refreshZohoToken, exchangeZohoCode,
+  fetchZohoStatus, refreshZohoToken, exchangeZohoCode, saveMapMarkerStyle,
 } from '../lib/api';
 import ApiCostPanel from './ApiCostPanel';
 import UsersAdmin from './UsersAdmin';
+import { MARKER_STYLES, normalizeMarkerStyle } from '../lib/mapMarkerStyle';
 
 const LAYER_LABEL = {
   leads: 'Leads', accounts: 'Accounts', meetings: 'Meetings', assets: 'Assets',
 };
 
-export default function AdminPanel({ me }) {
+export default function AdminPanel({ me, markerStyle, onMarkerStyle }) {
   const [dash, setDash] = useState(null);
   const [job, setJob] = useState(null);
   const [error, setError] = useState(null);
@@ -106,6 +107,41 @@ export default function AdminPanel({ me }) {
 
       <ApiCostPanel />
       <UsersAdmin me={me} />
+
+      <section className="soft-block map-style-admin">
+        <h2>Map display</h2>
+        <p className="muted">
+          How pins render for everyone on the map. Cluster circles grow with count and
+          overstate reach; pins and heat stay on real locations.
+        </p>
+        <div className="map-style-grid" role="radiogroup" aria-label="Map marker style">
+          {MARKER_STYLES.map((s) => {
+            const on = normalizeMarkerStyle(markerStyle) === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                className={`map-style-card ${on ? 'on' : ''}`}
+                onClick={async () => {
+                  setError(null); setMsg(null);
+                  try {
+                    const r = await saveMapMarkerStyle(s.id);
+                    onMarkerStyle?.(r.style || s.id);
+                    setMsg(`Map display: ${s.label}`);
+                  } catch (e) {
+                    setError(e.message);
+                  }
+                }}
+              >
+                <strong>{s.label}</strong>
+                <span>{s.hint}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       {dash && (
         <>

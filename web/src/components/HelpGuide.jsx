@@ -43,7 +43,7 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
           </li>
           <li>
             <strong>Pan and zoom</strong>
-            <span>Data loads for the visible area. If a banner asks you to zoom in, the area is too dense to plot every point.</span>
+            <span>Pins stay on real locations at every zoom. Heat under them shows density — a large glow means many nearby records, not a bigger market blob. Admins can switch Pins + heat, Pins only, Heat only, or Cluster circles under Admin → Map display. Data loads for the visible area. If a banner asks you to zoom in, the area is too dense to plot every point.</span>
           </li>
           <li>
             <strong>Select a pin</strong>

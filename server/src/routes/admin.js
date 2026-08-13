@@ -12,6 +12,7 @@ import {
   listAccounts, createAccount, updateAccount,
 } from '../accounts.js';
 import { zohoLoginEnabled } from '../zoho/login.js';
+import { getMapMarkerStyle, setMapMarkerStyle } from '../mapStyle.js';
 
 export const admin = Router();
 // Auth is enforced app-wide by requireAuth; writes may also need ADMIN_TOKEN.
@@ -80,6 +81,7 @@ admin.get('/dashboard', async (_req, res) => {
     geocoder: cfg.geocoder,
     hasGoogleKey: Boolean(cfg.googleKey),
     hasOlaKey: Boolean(cfg.olaKey),
+    markerStyle: await getMapMarkerStyle(),
     job,
   });
 });
@@ -297,6 +299,24 @@ admin.post('/usage/rates', async (req, res) => {
   } catch (e) {
     console.error('[admin/usage/rates]', e);
     res.status(500).json({ error: e.message || 'save rates failed' });
+  }
+});
+
+admin.get('/map-style', async (_req, res) => {
+  try {
+    res.json({ style: await getMapMarkerStyle() });
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'map style failed' });
+  }
+});
+
+admin.post('/map-style', async (req, res) => {
+  try {
+    const style = await setMapMarkerStyle(req.body?.style);
+    res.json({ ok: true, style });
+  } catch (e) {
+    console.error('[admin/map-style]', e);
+    res.status(500).json({ error: e.message || 'save map style failed' });
   }
 });
 
