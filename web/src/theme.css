@@ -167,12 +167,26 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   opacity: 0.7;
 }
 
-/* Layer dock */
-.layer-dock {
+/* Layer + insight docks share one stack so they cannot overlap */
+.map-chrome-docks {
   position: absolute;
   top: 72px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 24px);
+  pointer-events: none;
+  animation: dock-in 0.5s ease-out both;
+  transition: top 0.18s ease, bottom 0.18s ease;
+}
+.map-chrome-docks > * { pointer-events: auto; }
+
+.layer-dock {
+  position: relative;
   display: flex;
   gap: 6px;
   padding: 7px;
@@ -182,12 +196,9 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   border-radius: 16px;
   border: 1px solid rgba(254, 249, 245, 0.08);
   box-shadow: var(--shadow);
-  z-index: 5;
-  max-width: calc(100vw - 24px);
+  max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
-  animation: dock-in 0.5s ease-out both;
-  transition: top 0.18s ease;
 }
 .layer-dock::-webkit-scrollbar { display: none; }
 
@@ -236,26 +247,31 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   min-width: 0;
   line-height: 1.35;
 }
-.map-shell.has-issue .layer-dock {
+.map-shell.has-issue .map-chrome-docks {
   top: 118px;
 }
 .map-shell.has-issue .map-filter-chips {
   top: 168px;
 }
-.map-shell.has-issue.has-filter-chips .layer-dock {
+.map-shell.has-filter-chips .map-chrome-docks {
+  top: 118px;
+}
+.map-shell.has-issue.has-filter-chips .map-chrome-docks {
   top: 158px;
 }
 
 @media (max-width: 1100px) {
-  .layer-dock {
-    left: auto;
-    right: 16px;
+  .map-chrome-docks {
+    left: 12px;
+    right: 12px;
     transform: none;
-    max-width: min(560px, calc(100vw - 200px));
+    align-items: stretch;
+    max-width: none;
     animation: rise 0.45s ease-out both;
   }
-  .map-shell.has-issue .layer-dock {
-    top: 118px;
+  .layer-dock {
+    max-width: none;
+    justify-content: flex-start;
   }
 }
 @media (max-width: 720px) {
@@ -303,18 +319,7 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
     display: none;
   }
   .layer-dock {
-    top: auto;
-    bottom: calc(72px + var(--safe-b));
-    left: 12px;
-    right: 12px;
-    max-width: none;
-    transform: none;
-    animation: rise 0.45s ease-out both;
     justify-content: flex-start;
-  }
-  .map-shell.has-issue .layer-dock {
-    top: auto;
-    bottom: calc(72px + var(--safe-b));
   }
   .map-issue.map-issue-top {
     top: calc(56px + env(safe-area-inset-top, 0px));
@@ -328,7 +333,7 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
     bottom: calc(16px + var(--safe-b));
     left: 12px;
   }
-  .map-shell.filters-open .layer-dock,
+  .map-shell.filters-open .map-chrome-docks,
   .map-shell.filters-open .filter-fab,
   .map-shell.filters-open .map-filter-chips,
   .map-shell.filters-open .map-legend {
@@ -713,19 +718,13 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
 .legend-swatch.heat-hot { background: #c45c4a; }
 
 .insight-dock {
-  position: absolute;
-  top: 128px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 5;
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
   align-items: center;
-  max-width: calc(100vw - 24px);
-  pointer-events: none;
+  max-width: 100%;
 }
-.insight-dock > * { pointer-events: auto; }
 .insight-modes,
 .insight-days {
   display: flex;
@@ -881,32 +880,45 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
 
 @media (max-width: 1100px) {
   .insight-dock {
-    top: 72px;
-    left: 12px;
-    right: auto;
-    transform: none;
-    align-items: flex-start;
+    align-items: stretch;
+  }
+  .insight-modes,
+  .insight-days {
+    width: max-content;
+    max-width: 100%;
+    margin: 0 auto;
   }
 }
 @media (max-width: 720px) {
-  .insight-dock {
+  .map-chrome-docks {
     top: auto;
-    bottom: calc(124px + var(--safe-b));
+    bottom: calc(72px + var(--safe-b));
     left: 12px;
     right: 12px;
+    transform: none;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    max-width: none;
+    animation: rise 0.45s ease-out both;
+  }
+  .map-shell.has-issue .map-chrome-docks,
+  .map-shell.has-filter-chips .map-chrome-docks,
+  .map-shell.has-issue.has-filter-chips .map-chrome-docks {
+    top: auto;
+    bottom: calc(72px + var(--safe-b));
+  }
+  .insight-dock {
     align-items: stretch;
   }
   .map-shell.filters-open .insight-dock,
   .map-shell.filters-open .opp-panel,
   .map-shell.filters-open .opp-fab,
-  .map-shell.has-selected .layer-dock,
-  .map-shell.has-selected .insight-dock,
+  .map-shell.has-selected .map-chrome-docks,
   .map-shell.has-selected .map-legend,
   .map-shell.has-selected .filter-fab,
   .map-shell.has-selected .opp-fab,
   .map-shell.has-selected .google-maps-logo,
-  .map-shell.has-opp .layer-dock,
-  .map-shell.has-opp .insight-dock,
+  .map-shell.has-opp .map-chrome-docks,
   .map-shell.has-opp .map-legend,
   .map-shell.has-opp .filter-fab,
   .map-shell.has-opp .opp-fab,
@@ -1102,7 +1114,7 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   gap: 8px;
   background: var(--surface-solid);
 }
@@ -1194,6 +1206,50 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   align-items: center;
   justify-content: center;
 }
+.filter-fold {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  min-height: 36px;
+  padding: 0 0 6px;
+  text-align: left;
+}
+.filter-fold:hover { color: var(--ink); }
+.filter-section {
+  border-bottom: 1px solid var(--line);
+}
+.filter-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 10px 0;
+  min-height: 44px;
+  text-align: left;
+}
+.filter-section-head h4 {
+  margin: 0;
+}
+.filter-section-caret {
+  flex-shrink: 0;
+  font-size: 12px;
+  opacity: 0.45;
+  color: var(--ink);
+}
+.filter-section-body { padding: 0 0 10px; }
 .filter-search {
   width: 100%;
   box-sizing: border-box;

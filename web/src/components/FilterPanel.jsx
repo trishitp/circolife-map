@@ -148,6 +148,49 @@ function withSelectedFirst(visible, selected) {
   return [...extra, ...visible];
 }
 
+const SECTION_OPEN_KEY = 'circo.filterSectionOpen';
+const DEFAULT_SECTIONS = {
+  userStatus: true,
+  role: false,
+  owner: false,
+  territory: true,
+  source: false,
+};
+
+function loadOpenSections() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SECTION_OPEN_KEY) || 'null');
+    if (parsed && typeof parsed === 'object') return { ...DEFAULT_SECTIONS, ...parsed };
+  } catch { /* */ }
+  return { ...DEFAULT_SECTIONS };
+}
+
+function saveOpenSections(map) {
+  try {
+    localStorage.setItem(SECTION_OPEN_KEY, JSON.stringify(map));
+  } catch { /* */ }
+}
+
+function FilterSection({ id, title, count, open, onToggle, children }) {
+  return (
+    <section className={`filter-section ${open ? 'is-open' : ''}`}>
+      <button
+        type="button"
+        className="filter-section-head"
+        onClick={() => onToggle(id)}
+        aria-expanded={open}
+      >
+        <h4>
+          {title}
+          {count > 0 && <em>{count}</em>}
+        </h4>
+        <span className="filter-section-caret" aria-hidden>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && <div className="filter-section-body">{children}</div>}
+    </section>
+  );
+}
+
 export default function FilterPanel({ options, filters, setFilters, open, setOpen, optionsError }) {
   const [draft, setDraft] = useState(() => normalizeDraft(filters));
   const [ownerQ, setOwnerQ] = useState('');
@@ -157,6 +200,26 @@ export default function FilterPanel({ options, filters, setFilters, open, setOpe
   const [presetName, setPresetName] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
   const [savedFlash, setSavedFlash] = useState('');
+  const [openSections, setOpenSections] = useState(loadOpenSections);
+
+  const toggleSection = (id) => {
+    setOpenSections((cur) => {
+      const next = { ...cur, [id]: !cur[id] };
+      saveOpenSections(next);
+      return next;
+    });
+  };
+
+  const setAllSections = (open) => {
+    const next = {
+      userStatus: open, role: open, owner: open, territory: open, source: open,
+    };
+    setOpenSections(next);
+    saveOpenSections(next);
+    setMoreOpen(open);
+  };
+
+  const anySectionOpen = Object.values(openSections).some(Boolean) || moreOpen;
 
   useEffect(() => {
     if (open) {
@@ -341,6 +404,13 @@ export default function FilterPanel({ options, filters, setFilters, open, setOpe
               </button>
             </div>
           </div>
+          <button
+            type="button"
+            className="filter-fold"
+            onClick={() => setAllSections(!anySectionOpen)}
+          >
+            {anySectionOpen ? 'Collapse all' : 'Expand all'}
+          </button>
         </div>
 
         <div className="filter-panel-body">
@@ -364,83 +434,118 @@ export default function FilterPanel({ options, filters, setFilters, open, setOpe
             </div>
           )}
 
-          <h4>User status {selCount('userStatus') > 0 && <em>{selCount('userStatus')}</em>}</h4>
-          <MultiChipRow
-            items={[['Active', 'active'], ['Inactive', 'inactive']]}
-            values={draft.userStatus}
-            onToggle={(v) => toggleMulti('userStatus', v)}
-          />
+          <FilterSection
+            id="userStatus"
+            title="User status"
+            count={selCount('userStatus')}
+            open={openSections.userStatus}
+            onToggle={toggleSection}
+          >
+            <MultiChipRow
+              items={[['Active', 'active'], ['Inactive', 'inactive']]}
+              values={draft.userStatus}
+              onToggle={(v) => toggleMulti('userStatus', v)}
+            />
+          </FilterSection>
 
-          <h4>Role (CRM) {selCount('role') > 0 && <em>{selCount('role')}</em>}</h4>
-          {roles.length > 8 && (
+          <FilterSection
+            id="role"
+            title="Role (CRM)"
+            count={selCount('role')}
+            open={openSections.role}
+            onToggle={toggleSection}
+          >
+            {roles.length > 8 && (
+              <input
+                className="filter-search"
+                type="search"
+                placeholder="Search roles…"
+                value={roleQ}
+                onChange={(e) => setRoleQ(e.target.value)}
+                aria-label="Search roles"
+                enterKeyHint="search"
+              />
+            )}
+            <MultiChipRow
+              items={filteredRoles.map((r) => [r, r])}
+              values={draft.role}
+              onToggle={(v) => toggleMulti('role', v)}
+              empty={roles.length ? 'No matching roles' : 'No CRM roles yet — run a sync'}
+              scroll
+            />
+          </FilterSection>
+
+          <FilterSection
+            id="owner"
+            title="RM name"
+            count={selCount('owner')}
+            open={openSections.owner}
+            onToggle={toggleSection}
+          >
             <input
               className="filter-search"
               type="search"
-              placeholder="Search roles…"
-              value={roleQ}
-              onChange={(e) => setRoleQ(e.target.value)}
-              aria-label="Search roles"
+              placeholder="Search RMs…"
+              value={ownerQ}
+              onChange={(e) => setOwnerQ(e.target.value)}
+              aria-label="Search RM names"
               enterKeyHint="search"
             />
-          )}
-          <MultiChipRow
-            items={filteredRoles.map((r) => [r, r])}
-            values={draft.role}
-            onToggle={(v) => toggleMulti('role', v)}
-            empty={roles.length ? 'No matching roles' : 'No CRM roles yet — run a sync'}
-            scroll
-          />
-
-          <h4>RM name {selCount('owner') > 0 && <em>{selCount('owner')}</em>}</h4>
-          <input
-            className="filter-search"
-            type="search"
-            placeholder="Search RMs…"
-            value={ownerQ}
-            onChange={(e) => setOwnerQ(e.target.value)}
-            aria-label="Search RM names"
-            enterKeyHint="search"
-          />
-          <MultiChipRow
-            items={filteredOwners.map((o) => [o, o])}
-            values={draft.owner}
-            onToggle={(v) => toggleMulti('owner', v)}
-            empty={owners.length ? 'No matching RMs' : 'No RMs yet — run a sync'}
-            scroll
-          />
-          {!ownerQ && owners.length > 40 && (
-            <p className="filter-hint">Showing 40 of {owners.length} — search to find more</p>
-          )}
-
-          <h4>Territory {selCount('territory') > 0 && <em>{selCount('territory')}</em>}</h4>
-          <p className="filter-hint">Delhi includes NCR. Mumbai includes Thane, Navi Mumbai and MMR.</p>
-          <MultiChipRow
-            items={territories.map((t) => [t, t])}
-            values={draft.territory}
-            onToggle={(v) => toggleMulti('territory', v)}
-            empty="Territory groups unavailable"
-          />
-
-          <h4>Source {selCount('source') > 0 && <em>{selCount('source')}</em>}</h4>
-          <p className="filter-hint">Lead source — meetings, accounts and assets stay visible.</p>
-          {sources.length > 8 && (
-            <input
-              className="filter-search"
-              type="search"
-              placeholder="Search sources…"
-              value={sourceQ}
-              onChange={(e) => setSourceQ(e.target.value)}
-              aria-label="Search lead sources"
-              enterKeyHint="search"
+            <MultiChipRow
+              items={filteredOwners.map((o) => [o, o])}
+              values={draft.owner}
+              onToggle={(v) => toggleMulti('owner', v)}
+              empty={owners.length ? 'No matching RMs' : 'No RMs yet — run a sync'}
+              scroll
             />
-          )}
-          <MultiChipRow
-            items={filteredSources.map((s) => [s, s])}
-            values={draft.source}
-            onToggle={(v) => toggleMulti('source', v)}
-            empty={sources.length ? 'No matching sources' : 'No lead sources yet'}
-            scroll
-          />
+            {!ownerQ && owners.length > 40 && (
+              <p className="filter-hint">Showing 40 of {owners.length} — search to find more</p>
+            )}
+          </FilterSection>
+
+          <FilterSection
+            id="territory"
+            title="Territory"
+            count={selCount('territory')}
+            open={openSections.territory}
+            onToggle={toggleSection}
+          >
+            <p className="filter-hint">Delhi includes NCR. Mumbai includes Thane, Navi Mumbai and MMR.</p>
+            <MultiChipRow
+              items={territories.map((t) => [t, t])}
+              values={draft.territory}
+              onToggle={(v) => toggleMulti('territory', v)}
+              empty="Territory groups unavailable"
+            />
+          </FilterSection>
+
+          <FilterSection
+            id="source"
+            title="Source"
+            count={selCount('source')}
+            open={openSections.source}
+            onToggle={toggleSection}
+          >
+            <p className="filter-hint">Lead source — meetings, accounts and assets stay visible.</p>
+            {sources.length > 8 && (
+              <input
+                className="filter-search"
+                type="search"
+                placeholder="Search sources…"
+                value={sourceQ}
+                onChange={(e) => setSourceQ(e.target.value)}
+                aria-label="Search lead sources"
+                enterKeyHint="search"
+              />
+            )}
+            <MultiChipRow
+              items={filteredSources.map((s) => [s, s])}
+              values={draft.source}
+              onToggle={(v) => toggleMulti('source', v)}
+              empty={sources.length ? 'No matching sources' : 'No lead sources yet'}
+              scroll
+            />
+          </FilterSection>
 
           <button
             type="button"

@@ -287,18 +287,20 @@ export default function App() {
           </div>
         )}
 
-        <LayerDock active={active} toggle={toggle} counts={counts} />
-        <InsightDock
-          mode={insightMode}
-          days={insightDays}
-          onMode={(m) => {
-            setInsightMode(m);
-            if (m !== 'off') setOppOpen(true);
-            else setOppOpen(false);
-          }}
-          onDays={setInsightDays}
-          summary={insightData.summary}
-        />
+        <div className="map-chrome-docks">
+          <LayerDock active={active} toggle={toggle} counts={counts} />
+          <InsightDock
+            mode={insightMode}
+            days={insightDays}
+            onMode={(m) => {
+              setInsightMode(m);
+              if (m !== 'off') setOppOpen(true);
+              else setOppOpen(false);
+            }}
+            onDays={setInsightDays}
+            summary={insightData.summary}
+          />
+        </div>
 
         <div className={`map-status ${loading ? 'show' : ''}`} aria-live="polite">
           Updating map…
