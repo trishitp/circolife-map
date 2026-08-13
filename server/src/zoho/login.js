@@ -62,9 +62,7 @@ export function zohoAuthorizeUrl(req) {
   u.searchParams.set('scope', LOGIN_SCOPE);
   u.searchParams.set('client_id', loginClient().id);
   u.searchParams.set('response_type', 'code');
-  u.searchParams.set('access_type', 'online');
   u.searchParams.set('redirect_uri', redirect);
-  u.searchParams.set('prompt', 'select_account');
   u.searchParams.set('state', state);
   return { url: u.toString(), redirect };
 }
