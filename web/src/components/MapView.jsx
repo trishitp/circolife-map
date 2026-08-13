@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import Supercluster from 'supercluster';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { fetchLayer, fetchLayerFeature } from '../lib/api';
+import { fetchLayer, fetchLayerFeature, fetchCoverageGrid } from '../lib/api';
 import { onSelection } from '../lib/selection';
 import { resolveBasemapStyle, LABEL_FONTS_BY_STYLE, attachGoogleAttribution } from '../lib/basemap';
 import { INDIA_BOUNDS, INDIA_CENTER, INDIA_DEFAULT_ZOOM, INDIA_MIN_ZOOM } from '../lib/mapBounds';
@@ -129,9 +129,111 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
   }
 }
 
+function ensureCoverage(m, wired, onSelect) {
+  if (!m.getSource('coverage')) {
+    m.addSource('coverage', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  }
+  if (!m.getSource('visit-heat')) {
+    m.addSource('visit-heat', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+  }
+  const add = (id, spec) => { if (!m.getLayer(id)) m.addLayer(spec); };
+  add('coverage-fill', {
+    id: 'coverage-fill',
+    type: 'fill',
+    source: 'coverage',
+    paint: {
+      'fill-color': [
+        'match', ['get', 'kind'],
+        'untouched', '#c45c4a',
+        'thin', '#d4a017',
+        'covered', '#6BB35A',
+        '#c45c4a',
+      ],
+      'fill-opacity': [
+        'match', ['get', 'kind'],
+        'untouched', 0.38,
+        'thin', 0.28,
+        'covered', 0.16,
+        0.3,
+      ],
+    },
+  });
+  add('coverage-line', {
+    id: 'coverage-line',
+    type: 'line',
+    source: 'coverage',
+    paint: {
+      'line-color': [
+        'match', ['get', 'kind'],
+        'untouched', '#a33d2e',
+        'thin', '#8a6a18',
+        '#3d7a32',
+      ],
+      'line-width': 1.1,
+      'line-opacity': 0.7,
+    },
+  });
+  add('visit-heat', {
+    id: 'visit-heat',
+    type: 'heatmap',
+    source: 'visit-heat',
+    paint: {
+      'heatmap-weight': 1,
+      'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 7, 0.35, 14, 1.35],
+      'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 7, 14, 14, 32],
+      'heatmap-opacity': 0.78,
+      'heatmap-color': [
+        'interpolate', ['linear'], ['heatmap-density'],
+        0, 'rgba(254,249,245,0)',
+        0.15, 'rgba(189,224,237,0.55)',
+        0.4, 'rgba(161,73,150,0.55)',
+        0.7, 'rgba(196,92,74,0.75)',
+        1, 'rgba(122,36,36,0.9)',
+      ],
+    },
+  });
+
+  if (!wired.has('coverage')) {
+    wired.add('coverage');
+    m.on('click', 'coverage-fill', (e) => {
+      const pointLayers = Object.keys(LAYER_COLORS)
+        .flatMap((l) => [`${l}-pts`, `${l}-clusters`])
+        .filter((id) => m.getLayer(id));
+      if (pointLayers.length && m.queryRenderedFeatures(e.point, { layers: pointLayers }).length) {
+        return;
+      }
+      const f = e.features?.[0];
+      if (!f) return;
+      e.originalEvent?.stopPropagation?.();
+      const p = f.properties || {};
+      const lng = Number(p.lng);
+      const lat = Number(p.lat);
+      onSelect({
+        _layer: 'zone',
+        id: p.id,
+        title: p.kind === 'untouched' ? 'Untouched zone'
+          : p.kind === 'thin' ? 'Thin coverage' : 'Covered zone',
+        kind: p.kind,
+        leads: Number(p.leads) || 0,
+        stale: Number(p.stale) || 0,
+        visits: Number(p.visits) || 0,
+        score: Number(p.score) || 0,
+        lastVisit: p.lastVisit || null,
+        lng,
+        lat,
+      });
+      if (Number.isFinite(lng) && Number.isFinite(lat)) {
+        m.easeTo({ center: [lng, lat], offset: [0, -30], duration: 400 });
+      }
+    });
+    m.on('mouseenter', 'coverage-fill', () => { m.getCanvas().style.cursor = 'pointer'; });
+    m.on('mouseleave', 'coverage-fill', () => { m.getCanvas().style.cursor = ''; });
+  }
+}
+
 export default function MapView({
   active, filters, onSelect, onLoading, focusRequest, onFocusHandled, visible,
-  onMapIssue,
+  onMapIssue, insight, onInsight, flyRequest, onFlyHandled,
 }) {
   const el = useRef(null);
   const map = useRef(null);
@@ -148,12 +250,18 @@ export default function MapView({
   const onLoadingRef = useRef(onLoading);
   const onFocusHandledRef = useRef(onFocusHandled);
   const onMapIssueRef = useRef(onMapIssue);
+  const insightRef = useRef(insight);
+  const onInsightRef = useRef(onInsight);
+  const onFlyHandledRef = useRef(onFlyHandled);
   activeRef.current = active;
   filtersRef.current = filters;
   onSelectRef.current = onSelect;
   onLoadingRef.current = onLoading;
   onFocusHandledRef.current = onFocusHandled;
   onMapIssueRef.current = onMapIssue;
+  insightRef.current = insight;
+  onInsightRef.current = onInsight;
+  onFlyHandledRef.current = onFlyHandled;
 
   const pushClusters = () => {
     const m = map.current;
@@ -223,6 +331,53 @@ export default function MapView({
             loadIssues.push(`${layer}: ${e.message || 'load failed'}`);
           }
         }));
+
+        const ins = insightRef.current || { mode: 'off', days: 90 };
+        if (ins.mode && ins.mode !== 'off') {
+          try {
+            const cov = await fetchCoverageGrid({
+              bbox: wide.join(','),
+              zoom: Math.floor(m.getZoom() || 10),
+              days: ins.days || 90,
+              mode: ins.mode,
+              ...Object.fromEntries(
+                Object.entries(filtersRef.current || {}).map(([k, v]) => [
+                  k, Array.isArray(v) ? v.join(',') : v,
+                ]),
+              ),
+            }, { signal: ac.signal });
+            if (!ac.signal.aborted) {
+              const grid = ins.mode === 'heat'
+                ? { type: 'FeatureCollection', features: [] }
+                : cov;
+              m.getSource('coverage')?.setData({
+                type: 'FeatureCollection',
+                features: grid.features || [],
+              });
+              m.getSource('visit-heat')?.setData(
+                ins.mode === 'heat'
+                  ? (cov.heat || { type: 'FeatureCollection', features: [] })
+                  : { type: 'FeatureCollection', features: [] },
+              );
+              onInsightRef.current?.({
+                top: cov.top || [],
+                ghosts: cov.ghosts || [],
+                summary: cov.meta?.summary || null,
+              });
+            }
+          } catch (e) {
+            if (e?.name !== 'AbortError' && !ac.signal.aborted) {
+              console.warn('[coverage]', e);
+              m.getSource('coverage')?.setData({ type: 'FeatureCollection', features: [] });
+              m.getSource('visit-heat')?.setData({ type: 'FeatureCollection', features: [] });
+              onInsightRef.current?.({ top: [], ghosts: [], summary: null });
+            }
+          }
+        } else {
+          m.getSource('coverage')?.setData({ type: 'FeatureCollection', features: [] });
+          m.getSource('visit-heat')?.setData({ type: 'FeatureCollection', features: [] });
+          onInsightRef.current?.({ top: [], ghosts: [], summary: null });
+        }
         if (!ac.signal.aborted) {
           pushClusters();
           if (loadIssues.length) {
@@ -285,6 +440,7 @@ export default function MapView({
 
       const wire = () => {
         if (cancelled) return;
+        ensureCoverage(m, wired, (p) => onSelectRef.current?.(p));
         for (const [layer, color] of Object.entries(LAYER_COLORS)) {
           ensureOverlay(m, layer, color, wired, (p) => onSelectRef.current?.(p), selectedId, indexes);
         }
@@ -301,7 +457,8 @@ export default function MapView({
         }
         if (!ready.current) {
           m.on('click', (e) => {
-            const ids = Object.keys(LAYER_COLORS).flatMap((l) => [`${l}-pts`, `${l}-clusters`]).filter((lid) => m.getLayer(lid));
+            const ids = ['coverage-fill', ...Object.keys(LAYER_COLORS).flatMap((l) => [`${l}-pts`, `${l}-clusters`])]
+              .filter((lid) => m.getLayer(lid));
             const hits = ids.length ? m.queryRenderedFeatures(e.point, { layers: ids }) : [];
             if (!hits.length) {
               selectedId.current = null;
@@ -360,7 +517,7 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { refresh(); }, [active, filters]); // eslint-disable-line
+  useEffect(() => { refresh(); }, [active, filters, insight?.mode, insight?.days]); // eslint-disable-line
 
   // Resize when returning to the Map tab (shell was display:none / visibility hidden)
   useEffect(() => {
@@ -430,6 +587,19 @@ export default function MapView({
     })();
     return () => { cancelled = true; };
   }, [focusRequest]);
+
+  useEffect(() => {
+    if (!flyRequest || flyRequest.lng == null || flyRequest.lat == null) return;
+    const m = map.current;
+    if (!m || !ready.current) return;
+    m.easeTo({
+      center: [Number(flyRequest.lng), Number(flyRequest.lat)],
+      zoom: Math.max(m.getZoom(), flyRequest.zoom || 13),
+      duration: 650,
+      offset: [0, -40],
+    });
+    onFlyHandledRef.current?.();
+  }, [flyRequest]);
 
   useEffect(() => onSelection((p) => {
     const m = map.current;

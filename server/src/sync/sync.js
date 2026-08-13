@@ -8,7 +8,7 @@ import { q } from '../db.js';
 import { exportSql } from '../zoho/analyticsClient.js';
 import { cfg } from '../config.js';
 import {
-  LEADS_SQL, ACCOUNTS_SQL, MEETINGS_SQL, ASSETS_SQL,
+  LEADS_SQL, ACCOUNTS_SQL, MEETINGS_SQL, ASSETS_SQL, USERS_SQL,
   FSM_ADDRESSES_SQL, FSM_COMPANIES_SQL, ACCOUNT_ADDRESS_SQL,
 } from './extractQueries.js';
 import { resolvePoint, refreshTerritoryCentroids } from '../geocode/pipeline.js';
@@ -871,10 +871,47 @@ async function syncAssets() {
   };
 }
 
+/** Sync Zoho CRM Users for active/inactive + role filters. */
+export async function syncUsers() {
+  const rows = csv(await exportSql(USERS_SQL));
+  console.log(`[users] ${rows.length} rows`);
+  let n = 0;
+  for (const r of rows) {
+    const id = String(r.Id || '').trim();
+    const fullName = cleanText(r['Full Name']);
+    if (!id || !fullName) continue;
+    const statusRaw = String(r.Status || 'active').trim().toLowerCase();
+    const status = statusRaw === 'disabled' || statusRaw === 'inactive'
+      ? 'disabled' : 'active';
+    await q(`
+      INSERT INTO crm_users (user_id, full_name, email, status, role_name, profile_name, updated_at)
+      VALUES ($1,$2,$3,$4,$5,$6,now())
+      ON CONFLICT (user_id) DO UPDATE SET
+        full_name=EXCLUDED.full_name, email=EXCLUDED.email, status=EXCLUDED.status,
+        role_name=EXCLUDED.role_name, profile_name=EXCLUDED.profile_name, updated_at=now()`,
+      [
+        id,
+        fullName,
+        cleanText(r.Email) || null,
+        status,
+        cleanText(r['Role Name']) || null,
+        cleanText(r['Profile Name']) || null,
+      ]);
+    n++;
+  }
+  // Drop users removed from CRM
+  if (n) {
+    const ids = rows.map((r) => String(r.Id || '').trim()).filter(Boolean);
+    await q(`DELETE FROM crm_users WHERE NOT (user_id = ANY($1::text[]))`, [ids]);
+  }
+  return { layer: 'users', rows: rows.length, processed: n };
+}
+
 /** Full Zoho → Postgres sync. Returns run stats. Does not close the pool. */
 export async function runFullSync() {
   const t = Date.now();
   const layers = [];
+  layers.push(await syncUsers());
   layers.push(await syncLeads());
   await refreshTerritoryCentroids();
   layers.push(await syncAccounts());

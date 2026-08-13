@@ -29,6 +29,12 @@
 //  - shipping= full shipping address
 //  - checkin = Meeting field-agent check-in coords linked to lead/account
 
+// CRM Users — Status is active|disabled; Role Name drives map filters.
+export const USERS_SQL = `
+SELECT "Id", "Full Name", "Email", "Status", "Role Name", "Profile Name",
+       "Modified Time"
+FROM "Users"`;
+
 export const LEADS_SQL = `
 SELECT "Id", "Full Name", "Company", "Lead Owner Name", "Lead Status",
        "Lead Source", "Lead Territory",

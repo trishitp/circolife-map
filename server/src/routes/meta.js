@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { q } from '../db.js';
 import { cfg } from '../config.js';
+import { TERRITORY_GROUP_KEYS } from '../filters/mapFilters.js';
+import { syncUsers } from '../sync/sync.js';
 
 export const meta = Router();
 
@@ -166,19 +168,48 @@ meta.get('/stats', async (_req, res) => {
 
 meta.get('/filters', async (_req, res) => {
   try {
-    const [owners, territories, statuses, precisions] = await Promise.all([
+    // Ensure CRM users exist so role / active filters have options
+    const count = await q(`SELECT COUNT(*)::int AS n FROM crm_users`);
+    if (!count.rows[0]?.n) {
+      try {
+        await syncUsers();
+      } catch (e) {
+        console.warn('[meta/filters] users sync skipped:', e.message);
+      }
+    }
+
+    const [owners, roles, sources, statuses, precisions, ownerDetails, rawTerritories] = await Promise.all([
       q(`SELECT DISTINCT owner_name FROM map_points
          WHERE owner_name IS NOT NULL AND owner_name <> '' ORDER BY 1`),
-      q(`SELECT DISTINCT territory FROM map_points
-         WHERE territory IS NOT NULL AND territory <> '' ORDER BY 1`),
+      q(`SELECT DISTINCT role_name FROM crm_users
+         WHERE role_name IS NOT NULL AND role_name <> '' ORDER BY 1`),
+      q(`SELECT DISTINCT extra->>'source' AS source FROM map_points
+         WHERE layer = 'leads'
+           AND extra->>'source' IS NOT NULL
+           AND extra->>'source' <> ''
+         ORDER BY 1`),
       q(`SELECT DISTINCT status FROM map_points
          WHERE status IS NOT NULL AND status <> '' ORDER BY 1`),
       q(`SELECT DISTINCT precision FROM map_points
          WHERE precision IS NOT NULL AND precision <> 'none' ORDER BY 1`),
+      q(`
+        SELECT u.full_name AS name, u.role_name AS role,
+               CASE WHEN u.status = 'disabled' THEN 'inactive' ELSE 'active' END AS status
+        FROM crm_users u
+        WHERE u.full_name IS NOT NULL AND u.full_name <> ''
+        ORDER BY u.full_name`),
+      q(`SELECT DISTINCT territory FROM map_points
+         WHERE territory IS NOT NULL AND territory <> '' ORDER BY 1`),
     ]);
+
     res.json({
       owners: owners.rows.map((r) => r.owner_name),
-      territories: territories.rows.map((r) => r.territory),
+      ownerDetails: ownerDetails.rows,
+      roles: roles.rows.map((r) => r.role_name),
+      sources: sources.rows.map((r) => r.source),
+      territoryGroups: TERRITORY_GROUP_KEYS,
+      territories: rawTerritories.rows.map((r) => r.territory),
+      userStatuses: ['active', 'inactive'],
       statuses: statuses.rows.map((r) => r.status),
       precisions: precisions.rows.map((r) => r.precision),
     });

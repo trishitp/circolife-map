@@ -11,6 +11,7 @@ import { admin } from './routes/admin.js';
 import { discrepancies } from './routes/discrepancies.js';
 import { activity } from './routes/activity.js';
 import { routes as routePlanning, routesShare } from './routes/routes.js';
+import { coverage } from './routes/coverage.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -62,6 +63,7 @@ app.use('/api/gaps', gaps);
 app.use('/api/discrepancies', discrepancies);
 app.use('/api/activity', activity);
 app.use('/api/routes', routePlanning);
+app.use('/api/coverage', coverage);
 app.use('/api/admin', admin);
 
 // Optional production SPA (set WEB_DIST or use default ../web/dist)

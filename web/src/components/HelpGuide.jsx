@@ -20,6 +20,7 @@ export default function HelpGuide({ onOpenTab }) {
         <strong>Jump to</strong>
         <nav className="help-toc-links">
           <a href="#help-map">Map</a>
+          <a href="#help-insights">Untouched zones</a>
           <a href="#help-filters">Filters</a>
           <a href="#help-activity">Activity</a>
           <a href="#help-routes">Routes</a>
@@ -55,6 +56,31 @@ export default function HelpGuide({ onOpenTab }) {
         </ol>
       </section>
 
+      <section id="help-insights" className="help-section soft-block">
+        <div className="help-section-head">
+          <h2>Untouched zones &amp; insights</h2>
+          <button type="button" className="btn ghost sm" onClick={go('map')}>Open Map</button>
+        </div>
+        <ol className="help-steps">
+          <li>
+            <strong>Untouched</strong>
+            <span>Red cells are pockets with plotted leads but no GPS check-in in the last 30 / 90 / 180 days. Tap a cell or an opportunity to fly there.</span>
+          </li>
+          <li>
+            <strong>Coverage</strong>
+            <span>Every cell with leads, coloured by visit ratio — red unused, amber thin, green covered.</span>
+          </li>
+          <li>
+            <strong>Visit heat</strong>
+            <span>Where RMs actually checked in. Combine with filters (RM, role, territory) to see one team’s footprint.</span>
+          </li>
+          <li>
+            <strong>Ghost territories</strong>
+            <span>CRM territory names that have leads in view but zero check-ins in the window — often a naming / routing gap.</span>
+          </li>
+        </ol>
+      </section>
+
       <section id="help-filters" className="help-section soft-block">
         <div className="help-section-head">
           <h2>Filters</h2>
@@ -63,11 +89,15 @@ export default function HelpGuide({ onOpenTab }) {
         <ol className="help-steps">
           <li>
             <strong>Open Filters</strong>
-            <span>Bottom-left on Map. Search agents, territories, or statuses when lists are long.</span>
+            <span>Bottom-left on Map. Multi-select User status, CRM Role, RM name, Territory (7 metros), and Lead Source.</span>
           </li>
           <li>
-            <strong>What each filter does</strong>
-            <span>Agent, territory, status, and precision apply to every layer that is on. Meeting type (Normal/Joint) only affects Meetings. Recorded date uses the map record time (meeting start / check-in when present).</span>
+            <strong>Territory groups</strong>
+            <span>Delhi includes NCR (Noida, Gurugram, etc.). Mumbai includes Thane, Navi Mumbai, and the wider MMR.</span>
+          </li>
+          <li>
+            <strong>Apply &amp; Save</strong>
+            <span>Draft selections do nothing until you tap Apply. Save names a preset in this browser for reuse.</span>
           </li>
           <li>
             <strong>Active chips</strong>

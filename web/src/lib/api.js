@@ -85,6 +85,7 @@ export async function fetchMe() {
 
 const LAYER_FILTER_KEYS = new Set([
   'owner', 'territory', 'status', 'precision', 'from', 'to', 'joint', 'limit',
+  'role', 'userStatus', 'source',
 ]);
 
 function layerQuery(filters = {}) {
@@ -92,6 +93,11 @@ function layerQuery(filters = {}) {
   for (const [k, v] of Object.entries(filters)) {
     if (!LAYER_FILTER_KEYS.has(k)) continue;
     if (v == null || v === '') continue;
+    if (Array.isArray(v)) {
+      if (!v.length) continue;
+      out[k] = v.join(',');
+      continue;
+    }
     out[k] = v;
   }
   return out;
@@ -107,6 +113,8 @@ export async function fetchLayer(layer, bbox, filters, opts = {}) {
 export async function fetchLayerFeature(layer, id, opts = {}) {
   return jfetch(`/api/layers/${layer}/feature/${encodeURIComponent(id)}`, opts);
 }
+export const fetchCoverageGrid = (params, opts = {}) =>
+  jfetch(`/api/coverage/grid?${qs(params)}`, opts);
 export const fetchStats = () => jfetch('/api/meta/stats');
 export const fetchFilters = () => jfetch('/api/meta/filters');
 

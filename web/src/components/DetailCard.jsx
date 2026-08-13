@@ -22,6 +22,7 @@ const LAYER_LABEL = {
   accounts: 'Account',
   meetings: 'Meeting',
   assets: 'Asset',
+  zone: 'Zone',
 };
 
 const LAYER_COLOR = {
@@ -29,6 +30,7 @@ const LAYER_COLOR = {
   accounts: '#2E1F40',
   meetings: '#5FA9C6',
   assets: '#6BB35A',
+  zone: '#c45c4a',
 };
 
 export default function DetailCard({ p, onClose }) {
@@ -45,8 +47,18 @@ export default function DetailCard({ p, onClose }) {
   if (!p) return null;
 
   const layer = p._layer;
+  const isZone = layer === 'zone';
   const assetNo = p.assetNumber || (layer === 'assets' ? p.title : null);
-  const rows = [
+  const rows = isZone ? [
+    ['Kind', p.kind === 'untouched' ? 'Untouched' : p.kind === 'thin' ? 'Thin coverage' : 'Covered'],
+    ['Leads', String(p.leads ?? 0)],
+    p.stale != null && ['Stale leads', String(p.stale)],
+    ['Check-ins', String(p.visits ?? 0)],
+    ['Score', String(p.score ?? 0)],
+    ['Last visit', p.lastVisit
+      ? new Date(p.lastVisit).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+      : 'Never in window'],
+  ].filter(Boolean) : [
     layer === 'assets' && assetNo && ['Asset No', assetNo],
     layer === 'assets' && p.assetName && p.assetName !== assetNo && ['Model', p.assetName],
     layer === 'assets' && p.mac && ['MAC', p.mac],
@@ -84,9 +96,20 @@ export default function DetailCard({ p, onClose }) {
           ))}
         </dl>
       )}
-      <span className={`precision ${p.precision || ''}`}>
-        {PRECISION_COPY[p.precision] || p.precision || 'Location'}
-      </span>
+      {!isZone && (
+        <span className={`precision ${p.precision || ''}`}>
+          {PRECISION_COPY[p.precision] || p.precision || 'Location'}
+        </span>
+      )}
+      {isZone && (
+        <span className={`precision ${p.kind === 'untouched' ? 'pincode' : ''}`}>
+          {p.kind === 'untouched'
+            ? 'Leads here, no GPS check-ins in the window'
+            : p.kind === 'thin'
+              ? 'A few visits vs many leads'
+              : 'Visited relative to lead density'}
+        </span>
+      )}
       {p.crmUrl && (
         <div>
           <a className="cta" href={p.crmUrl} target="_blank" rel="noreferrer">

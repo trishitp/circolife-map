@@ -3,6 +3,7 @@ import MapView from './components/MapView';
 import LayerDock from './components/LayerDock';
 import FilterPanel, {
   activeFilterEntries, describeFilter, FILTER_LABELS,
+  loadLastFilters, saveLastFilters,
 } from './components/FilterPanel';
 import DetailCard from './components/DetailCard';
 import GapsPanel from './components/GapsPanel';
@@ -13,6 +14,8 @@ import RoutesPanel from './components/RoutesPanel';
 import SharedRouteView from './components/SharedRouteView';
 import HelpGuide from './components/HelpGuide';
 import LoginScreen from './components/LoginScreen';
+import InsightDock from './components/InsightDock';
+import OpportunityPanel from './components/OpportunityPanel';
 import {
   fetchStats, fetchFilters, fetchAuthStatus, fetchMe, login, logout, getAppToken,
 } from './lib/api';
@@ -43,9 +46,10 @@ export default function App() {
   const [authState, setAuthState] = useState(() => (shareToken ? 'share' : 'loading'));
   const [tab, setTab] = useState('map');
   const [active, setActive] = useState(new Set(['leads', 'meetings']));
-  const [filters, setFilters] = useState({});
+  const [filters, setFilters] = useState(() => loadLastFilters());
   const [options, setOptions] = useState({
-    owners: [], territories: [], statuses: [], precisions: [],
+    owners: [], ownerDetails: [], roles: [], sources: [],
+    territoryGroups: [], territories: [], userStatuses: [], statuses: [], precisions: [],
   });
   const [optionsError, setOptionsError] = useState(null);
   const [counts, setCounts] = useState({});
@@ -54,6 +58,11 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [focusRequest, setFocusRequest] = useState(null);
   const [mapIssue, setMapIssue] = useState(null);
+  const [insightMode, setInsightMode] = useState('off');
+  const [insightDays, setInsightDays] = useState(90);
+  const [insightData, setInsightData] = useState({ top: [], ghosts: [], summary: null });
+  const [oppOpen, setOppOpen] = useState(false);
+  const [flyRequest, setFlyRequest] = useState(null);
 
   const bootstrap = async () => {
     try {
@@ -94,7 +103,12 @@ export default function App() {
       .then((o) => {
         setOptions({
           owners: o.owners || [],
+          ownerDetails: o.ownerDetails || [],
+          roles: o.roles || [],
+          sources: o.sources || [],
+          territoryGroups: o.territoryGroups || o.territories || [],
           territories: o.territories || [],
+          userStatuses: o.userStatuses || ['active', 'inactive'],
           statuses: o.statuses || [],
           precisions: o.precisions || [],
         });
@@ -112,24 +126,28 @@ export default function App() {
     return undefined;
   }, [authState]);
 
+  useEffect(() => {
+    saveLastFilters(filters);
+  }, [filters]);
+
   const toggle = (k) => setActive((s) => {
     const n = new Set(s);
     n.has(k) ? n.delete(k) : n.add(k);
     return n;
   });
 
-  const focusFromGap = ({ territory, layer, sourceId }) => {
+  const openFilters = (next) => {
+    if (next) {
+      setSelected(null);
+      setOppOpen(false);
+    }
+    setPanelOpen(next);
+  };
+
+  const focusFromGap = ({ layer, sourceId }) => {
     setTab('map');
-    // Reset other filters that would hide the focused point
-    setFilters((f) => ({
-      owner: '',
-      status: '',
-      precision: '',
-      joint: '',
-      from: '',
-      to: '',
-      territory: territory || f.territory || '',
-    }));
+    // Clear filters so the focused point is not hidden
+    setFilters({});
     if (layer) setActive(new Set([layer]));
     if (sourceId && layer) {
       setFocusRequest({ layer, id: String(sourceId), nonce: Date.now() });
@@ -177,7 +195,10 @@ export default function App() {
               type="button"
               className={`app-tab ${tab === t.id ? 'on' : ''}`}
               aria-pressed={tab === t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => {
+                setPanelOpen(false);
+                setTab(t.id);
+              }}
             >
               {t.label}
             </button>
@@ -194,6 +215,8 @@ export default function App() {
           tab === 'map' ? '' : 'is-hidden',
           mapIssue ? 'has-issue' : '',
           activeFilters.length > 0 ? 'has-filter-chips' : '',
+          panelOpen ? 'filters-open' : '',
+          insightMode !== 'off' ? 'has-insights' : '',
         ].filter(Boolean).join(' ')}
         aria-hidden={tab !== 'map'}
       >
@@ -213,6 +236,17 @@ export default function App() {
         )}
 
         <LayerDock active={active} toggle={toggle} counts={counts} />
+        <InsightDock
+          mode={insightMode}
+          days={insightDays}
+          onMode={(m) => {
+            setInsightMode(m);
+            if (m !== 'off') setOppOpen(true);
+            else setOppOpen(false);
+          }}
+          onDays={setInsightDays}
+          summary={insightData.summary}
+        />
 
         <div className={`map-status ${loading ? 'show' : ''}`} aria-live="polite">
           Updating map…
@@ -256,22 +290,68 @@ export default function App() {
           onFocusHandled={() => setFocusRequest(null)}
           onMapIssue={setMapIssue}
           visible={tab === 'map'}
+          insight={{ mode: insightMode, days: insightDays }}
+          onInsight={setInsightData}
+          flyRequest={flyRequest}
+          onFlyHandled={() => setFlyRequest(null)}
         />
 
         <div className="map-legend" aria-hidden>
-          <strong>Precision</strong>
-          <div className="legend-row"><span className="legend-swatch exact" /> Exact / geocoded</div>
-          <div className="legend-row"><span className="legend-swatch approx" /> Check-in (~1 km)</div>
-          <div className="legend-row"><span className="legend-swatch pincode" /> Pincode / territory</div>
-          <div className="legend-row"><span className="legend-swatch inherited" /> Inherited</div>
+          {insightMode === 'off' ? (
+            <>
+              <strong>Precision</strong>
+              <div className="legend-row"><span className="legend-swatch exact" /> Exact / geocoded</div>
+              <div className="legend-row"><span className="legend-swatch approx" /> Check-in (~1 km)</div>
+              <div className="legend-row"><span className="legend-swatch pincode" /> Pincode / territory</div>
+              <div className="legend-row"><span className="legend-swatch inherited" /> Inherited</div>
+            </>
+          ) : insightMode === 'heat' ? (
+            <>
+              <strong>Visit heat</strong>
+              <div className="legend-row"><span className="legend-swatch heat-cool" /> Quiet</div>
+              <div className="legend-row"><span className="legend-swatch heat-hot" /> Heavy check-ins</div>
+            </>
+          ) : (
+            <>
+              <strong>{insightMode === 'untouched' ? 'Untouched' : 'Coverage'}</strong>
+              <div className="legend-row"><span className="legend-swatch zone-untouched" /> No visits · has leads</div>
+              {insightMode === 'coverage' && (
+                <>
+                  <div className="legend-row"><span className="legend-swatch zone-thin" /> Thin vs leads</div>
+                  <div className="legend-row"><span className="legend-swatch zone-covered" /> Covered</div>
+                </>
+              )}
+            </>
+          )}
         </div>
+
+        {insightMode !== 'off' && !oppOpen && (
+          <button
+            type="button"
+            className="opp-fab"
+            onClick={() => setOppOpen(true)}
+          >
+            Opportunities
+            {insightData.top?.length > 0 && <span className="badge">{insightData.top.length}</span>}
+          </button>
+        )}
+
+        <OpportunityPanel
+          open={oppOpen && insightMode !== 'off'}
+          onClose={() => setOppOpen(false)}
+          top={insightData.top}
+          ghosts={insightData.ghosts}
+          days={insightDays}
+          onFly={(z) => setFlyRequest({ ...z, nonce: Date.now() })}
+          onSelect={setSelected}
+        />
 
         <FilterPanel
           options={options}
           filters={filters}
           setFilters={setFilters}
           open={panelOpen}
-          setOpen={setPanelOpen}
+          setOpen={openFilters}
           optionsError={optionsError}
         />
 

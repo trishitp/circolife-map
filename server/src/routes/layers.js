@@ -2,17 +2,11 @@
 // this is what keeps mobile on 4G alive at 75K+ leads.
 import { Router } from 'express';
 import { q } from '../db.js';
+import { buildMapFilterClauses } from '../filters/mapFilters.js';
 
 export const layers = Router();
 
 const LAYERS = new Set(['leads', 'accounts', 'meetings', 'assets']);
-
-function istDayBound(dateStr, end) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-  return end
-    ? `${dateStr}T23:59:59.999+05:30`
-    : `${dateStr}T00:00:00+05:30`;
-}
 
 function featureFromRow(r) {
   return {
@@ -37,29 +31,7 @@ function buildFilterWheres(req, layer, params) {
     `layer = $1`, `geom IS NOT NULL`,
     `geom && ST_MakeEnvelope($2,$3,$4,$5,4326)`,
   ];
-  const add = (sql, v) => {
-    params.push(v);
-    wheres.push(sql.replace(/\?/g, `$${params.length}`));
-  };
-  if (req.query.owner) add(`owner_name = ?`, req.query.owner);
-  if (req.query.territory) add(`territory = ?`, req.query.territory);
-  if (req.query.status) add(`status = ?`, req.query.status);
-  if (req.query.precision) add(`precision = ?`, req.query.precision);
-  if (req.query.from) {
-    add(`record_ts >= ?::timestamptz`, istDayBound(String(req.query.from), false));
-  }
-  if (req.query.to) {
-    add(`record_ts <= ?::timestamptz`, istDayBound(String(req.query.to), true));
-  }
-  // Joint only on meetings. Missing flag = normal (matches Activity metrics).
-  if (req.query.joint != null && req.query.joint !== '' && layer === 'meetings') {
-    const j = String(req.query.joint).toLowerCase();
-    if (j === 'true' || j === '1' || j === 'yes') {
-      wheres.push(`COALESCE((extra->>'joint')::boolean, false) = true`);
-    } else if (j === 'false' || j === '0' || j === 'no') {
-      wheres.push(`COALESCE((extra->>'joint')::boolean, false) = false`);
-    }
-  }
+  wheres.push(...buildMapFilterClauses(req.query, params, { layer }));
   return wheres;
 }
 
@@ -86,7 +58,7 @@ layers.get('/:layer/feature/:id', async (req, res) => {
   }
 });
 
-// GET /api/layers/:layer?bbox=minLng,minLat,maxLng,maxLat&owner=&territory=&status=&precision=&from=&to=&joint=&limit=
+// GET /api/layers/:layer?bbox=...&owner=&territory=&role=&userStatus=&source=&status=&precision=&from=&to=&joint=&limit=
 layers.get('/:layer', async (req, res) => {
   try {
     const layer = req.params.layer;
