@@ -69,9 +69,7 @@ export default function ApiCostPanel() {
     <section className="soft-block api-cost">
       <h2>API cost</h2>
       <p className="muted">
-        Estimated spend from calls this app logs (geocode, Routes, Directions, Maps JS).
-        Not a Google Cloud invoice. 2D map tiles (~$0.60 / 1,000) are fetched by the
-        browser and do not appear here.
+        Estimated spend from Maps API calls this app logs. This is not a Google Cloud invoice.
       </p>
       {error && <div className="banner err">{error}</div>}
       {msg && <div className="banner ok">{msg}</div>}

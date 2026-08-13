@@ -298,19 +298,19 @@ export default function RoutePlanView({ options = {} }) {
       if (navigator.share) {
         try {
           await navigator.share({
-            title: `Circolife route · ${owner}`,
-            text: `Your day route for ${date}`,
+            title: `Circolife Maps route`,
+            text: `Your route for ${date}`,
             url,
           });
-          setMsg('Shared with RM');
+          setMsg('Shared');
           return;
         } catch {
           // user cancelled share sheet — still keep link
         }
       }
       setMsg(copied
-        ? 'Link copied — send to RM (WhatsApp / SMS)'
-        : 'Share link ready — copy and send to RM');
+        ? 'Link copied. Send it to the field agent.'
+        : 'Share link ready. Copy and send it to the field agent.');
     } catch (e) {
       setError(e.message);
     } finally {
@@ -391,7 +391,7 @@ export default function RoutePlanView({ options = {} }) {
         </div>
         <div className="routes-actions">
           <button type="button" className="btn" disabled={!owner || loading} onClick={load}>
-            {loading ? 'Loading…' : 'Load'}
+            {loading ? 'Loading…' : 'Load meetings'}
           </button>
           <button
             type="button"
@@ -410,7 +410,7 @@ export default function RoutePlanView({ options = {} }) {
             disabled={!owner || !planStops.length || sharing}
             onClick={shareWithRm}
           >
-            {sharing ? 'Sharing…' : 'Share to RM'}
+            {sharing ? 'Sharing…' : 'Share with field'}
           </button>
           <button type="button" className="btn ghost" onClick={clearPlan}>
             Clear
@@ -440,7 +440,7 @@ export default function RoutePlanView({ options = {} }) {
       {warning && <p className="banner warn">{warning}</p>}
       {shareUrl && (
         <div className="share-link-bar">
-          <span className="muted">RM link</span>
+          <span className="muted">Share link</span>
           <input className="input share-link-input" readOnly value={shareUrl} onFocus={(e) => e.target.select()} />
           <button
             type="button"
@@ -460,7 +460,7 @@ export default function RoutePlanView({ options = {} }) {
       )}
 
       {!owner && (
-        <p className="muted">Pick a field agent and date to build a day route plan.</p>
+        <p className="muted">Choose a field agent and date to plan the day.</p>
       )}
 
       {owner && candidates && (
@@ -510,7 +510,7 @@ export default function RoutePlanView({ options = {} }) {
               </div>
               <div className="routes-map-actions">
                 <button type="button" className="btn ghost sm" onClick={exploreNearSelected}>
-                  Explore nearest
+                  Find nearby
                 </button>
                 {navAll && (
                   <a className="btn sm" href={navAll} target="_blank" rel="noreferrer">
@@ -531,7 +531,7 @@ export default function RoutePlanView({ options = {} }) {
                   )}
                 </div>
                 {!planStops.length && (
-                  <p className="muted">No stops in plan. Load meetings or add nearby drop-ins.</p>
+                  <p className="muted">No stops yet. Load meetings or add nearby leads and accounts.</p>
                 )}
                 <ol className="walk-stop-list route-stop-list">
                   {planStops.map((s, idx) => {
@@ -590,13 +590,13 @@ export default function RoutePlanView({ options = {} }) {
 
               <div className="soft-block route-plan-panel">
                 <div className="route-panel-head">
-                  <h2>Nearby drop-ins</h2>
+                  <h2>Nearby stops</h2>
                   <button type="button" className="btn ghost sm" onClick={exploreNearSelected}>
                     Refresh
                   </button>
                 </div>
                 {!nearby.length && (
-                  <p className="muted">No nearby leads/accounts — try Explore nearest or widen radius.</p>
+                  <p className="muted">No nearby leads or accounts. Try Find nearby, or widen the radius.</p>
                 )}
                 <ul className="route-nearby-list">
                   {nearby.filter((s) => !planIdSet.has(s.id)).slice(0, 20).map((s) => (

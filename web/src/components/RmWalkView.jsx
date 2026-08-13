@@ -180,10 +180,10 @@ export default function RmWalkView({ options = {}, initialOwner, initialDate }) 
       />
 
       {error && <p className="banner err">{error}</p>}
-      {loading && <p className="muted">Loading walk…</p>}
+      {loading && <p className="muted">Loading the day’s walk…</p>}
 
       {!owner && !loading && (
-        <p className="muted">Pick a field agent and date to see their check-in places and meeting walk.</p>
+        <p className="muted">Choose a field agent and date to see check-in places and meetings.</p>
       )}
 
       {owner && data && !loading && (

@@ -17,8 +17,8 @@ export default function ActivityPanel({ options = {} }) {
         <div>
           <h1>Activity</h1>
           <p>
-            Coach field agents with check-in place routes and multi-agent comparison
-            (scheduled vs check-in · geodesic path from check-in GPS · IST).
+            Compare field teams, then open a single day’s walk to coach check-ins
+            against the planned meetings.
           </p>
         </div>
         <div className="activity-mode-tabs" role="tablist" aria-label="Activity mode">
@@ -55,12 +55,9 @@ export default function ActivityPanel({ options = {} }) {
       )}
 
       <p className="activity-footnote muted">
-        Late = check-in more than 15 minutes after scheduled start.
-        Path km / places use field check-in GPS only — full-precision coords from Zoho
-        (CAST export; not the 2-dp Analytics display).
-        Map pins are places; timeline shows every meeting with “@ place N” and lat/lng.
-        Same-cell check-ins (~50 m) share one pin (×N). Straight-line distance, not roads.
-        After coord changes: run <code>npm run sync:meeting-coords</code> in server/.
+        A visit is late when the check-in is more than 15 minutes after the scheduled start.
+        Distances are straight-line from check-in GPS, not road distance. Nearby check-ins
+        (about 50 m) share a pin. Dates and times use India Standard Time.
       </p>
     </div>
   );

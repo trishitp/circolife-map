@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchSharedRoute, googleMapsNavUrl, googleMapsStopUrl } from '../lib/api';
 import { decodePolyline } from '../lib/polyline';
 import RouteMap from './RouteMap';
+import BrandMark from './BrandMark';
+import AppLoader from './AppLoader';
 
 function fmtTime(iso) {
   if (!iso) return null;
@@ -123,23 +125,16 @@ export default function SharedRouteView({ token }) {
   const navSelected = selected ? googleMapsStopUrl(selected) : null;
 
   if (loading) {
-    return (
-      <div className="riq-app riq-state">
-        <div className="riq-pulse" aria-hidden />
-        <p>Loading your day route…</p>
-      </div>
-    );
+    return <AppLoader message="Loading your route" />;
   }
 
   if (error || !plan) {
     return (
       <div className="riq-app riq-state">
-        <div className="riq-brand">
-          circo<span>life</span>
-        </div>
-        <h1>Link unavailable</h1>
-        <p>{error || 'This route link expired or was removed.'}</p>
-        <p className="riq-hint">Ask your manager for a fresh share link.</p>
+        <BrandMark product="Maps" />
+        <h1>This link is no longer valid</h1>
+        <p>{error || 'The route was removed or the link has expired.'}</p>
+        <p className="riq-hint">Ask your lead for a new share link.</p>
       </div>
     );
   }
@@ -159,10 +154,7 @@ export default function SharedRouteView({ token }) {
         />
         <div className="riq-map-veil" aria-hidden />
         <header className="riq-top">
-          <div className="riq-brand">
-            circo<span>life</span>
-            <em>route</em>
-          </div>
+          <BrandMark compact product="Route" className="riq-brand" />
           <div className="riq-date-chip">{fmtDate(plan.plan_date)}</div>
         </header>
         <div className="riq-float-kpis" aria-label="Route summary">

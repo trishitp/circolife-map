@@ -138,8 +138,7 @@ export default function DiscrepanciesPanel({ onFocusMap }) {
         <div>
           <h1>Discrepancies</h1>
           <p>
-            Where MapMyIndia, billing, shipping, and field check-ins disagree —
-            the trust layer for Circolife Maps.
+            Records where MapMyIndia, billing, shipping, and field check-ins do not agree.
           </p>
         </div>
         <button type="button" className="btn" onClick={exportCsv}>
@@ -158,7 +157,9 @@ export default function DiscrepanciesPanel({ onFocusMap }) {
               className={`stat-card sev-${sev} ${severity === sev ? 'on' : ''}`}
               onClick={() => { setSeverity(severity === sev ? '' : sev); setOffset(0); }}
             >
-              <span className="stat-label">{sev}</span>
+              <span className="stat-label">
+                {sev === 'alert' ? 'Alert' : sev === 'watch' ? 'Watch' : 'Aligned'}
+              </span>
               <span className="stat-value">
                 {(summary.bySeverity[sev] || 0).toLocaleString('en-IN')}
               </span>
@@ -181,7 +182,7 @@ export default function DiscrepanciesPanel({ onFocusMap }) {
 
       {summary?.topConflictPairs?.length > 0 && (
         <section className="soft-block">
-          <h2>Top conflict pairs (watch + alert)</h2>
+          <h2>Most common conflicts</h2>
           <ul className="reason-list">
             {summary.topConflictPairs.map((p) => (
               <li key={p.pair}>
@@ -196,7 +197,7 @@ export default function DiscrepanciesPanel({ onFocusMap }) {
       <div className="toolbar">
         <input
           className="input"
-          placeholder="Search name, owner, territory, id…"
+          placeholder="Search name, owner, territory, or ID"
           value={q}
           onChange={(e) => { setQ(e.target.value); setOffset(0); }}
         />
@@ -248,7 +249,7 @@ export default function DiscrepanciesPanel({ onFocusMap }) {
               <tr><td colSpan={7} className="muted">Loading…</td></tr>
             )}
             {!loading && rows.length === 0 && (
-              <tr><td colSpan={7} className="muted">No discrepancies match filters.</td></tr>
+              <tr><td colSpan={7} className="muted">No records match these filters.</td></tr>
             )}
             {rows.map((r) => (
               <tr key={`${r.entity_layer}-${r.entity_id}`}>
@@ -337,7 +338,7 @@ export default function DiscrepanciesPanel({ onFocusMap }) {
               </button>
             </header>
 
-            {detailLoading && <p className="muted">Loading signals…</p>}
+            {detailLoading && <p className="muted">Loading location sources…</p>}
 
             {!detailLoading && disc && (
               <>

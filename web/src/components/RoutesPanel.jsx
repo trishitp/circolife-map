@@ -7,8 +7,8 @@ export default function RoutesPanel({ options = {} }) {
         <div>
           <h1>Routes</h1>
           <p>
-            Smart day planning for field agents — load today’s meetings, add nearby
-            drop-ins, optimize on roads, navigate in Google Maps.
+            Plan the day for a field agent: load meetings, add nearby stops, optimize
+            the drive, and share a private link for navigation.
           </p>
         </div>
       </div>
@@ -16,10 +16,10 @@ export default function RoutesPanel({ options = {} }) {
       <RoutePlanView options={options} />
 
       <p className="activity-footnote muted">
-        Plans use locatable stops only (exact / geocoded / approx). Pincode and territory
-        pins are excluded unless already on a meeting. Optimize calls Google Routes when
-        available, otherwise a straight-line nearest-neighbour order. Drafts save per
-        agent + IST date. Activity stays historical coaching; Routes is forward planning.
+        Only stops with a usable location are included. Optimize uses Google Routes when
+        it is available; otherwise it uses a nearest-neighbour order. Drafts are saved
+        per agent and date (IST). Activity is for coaching past visits; Routes is for
+        planning the day ahead.
       </p>
     </div>
   );

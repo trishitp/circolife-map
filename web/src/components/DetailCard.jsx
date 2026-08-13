@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { emitSelection } from '../lib/selection';
+import { IconAc } from './icons';
 
 const PRECISION_COPY = {
   exact: 'Exact location',
@@ -81,8 +82,10 @@ export default function DetailCard({ p, onClose }) {
       <button type="button" className="x" onClick={onClose} aria-label="Close">✕</button>
       {layer && (
         <div className="layer-tag" style={{ '--tag-color': LAYER_COLOR[layer] }}>
-          <span className="dot" aria-hidden />
-          {LAYER_LABEL[layer] || layer}
+          {layer === 'assets'
+            ? <span className="ac-glyph" aria-hidden><IconAc size={14} /></span>
+            : <span className="dot" aria-hidden />}
+          {layer === 'assets' ? 'AC' : (LAYER_LABEL[layer] || layer)}
         </div>
       )}
       <h3>{layer === 'assets' ? (assetNo || p.title || 'Asset') : (p.title || 'Untitled')}</h3>

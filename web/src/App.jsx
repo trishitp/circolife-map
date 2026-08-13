@@ -14,9 +14,11 @@ import RoutesPanel from './components/RoutesPanel';
 import SharedRouteView from './components/SharedRouteView';
 import HelpGuide from './components/HelpGuide';
 import LoginScreen from './components/LoginScreen';
-import InsightDock, { INSIGHT_MODES } from './components/InsightDock';
+import InsightDock from './components/InsightDock';
 import OpportunityPanel from './components/OpportunityPanel';
 import MobileNav from './components/MobileNav';
+import BrandMark from './components/BrandMark';
+import AppLoader from './components/AppLoader';
 import { IconInsights, IconLegend, IconZones } from './components/icons';
 import {
   fetchStats, fetchFilters, fetchAuthStatus, fetchMe, login, logout, getAppToken,
@@ -30,7 +32,7 @@ const TABS = [
   { id: 'disc', label: 'Discrepancies' },
   { id: 'gaps', label: 'Gaps' },
   { id: 'admin', label: 'Admin' },
-  { id: 'help', label: 'How to use' },
+  { id: 'help', label: 'Help' },
 ];
 
 function takeAuthFromUrl() {
@@ -204,8 +206,6 @@ export default function App() {
     }
   };
 
-  const insightLabel = INSIGHT_MODES.find((m) => m.id === insightMode)?.short || 'Insights';
-
   const focusFromGap = ({ layer, sourceId }) => {
     setTab('map');
     // Clear filters so the focused point is not hidden
@@ -235,11 +235,7 @@ export default function App() {
   }
 
   if (authState === 'loading') {
-    return (
-      <div className="login-screen">
-        <div className="login-card muted">Loading Circolife Maps…</div>
-      </div>
-    );
+    return <AppLoader />;
   }
 
   if (authState === 'need') {
@@ -257,10 +253,7 @@ export default function App() {
   return (
     <div className={`app-shell ${tab === 'map' ? 'is-map' : 'is-page'}`}>
       <div className="top-chrome">
-        <div className="brand">
-          circo<span>life</span>
-          <small>maps</small>
-        </div>
+        <BrandMark />
         <nav className="app-tabs" aria-label="Views">
           {visibleTabs.map((t) => (
             <button
@@ -274,7 +267,7 @@ export default function App() {
             </button>
           ))}
         </nav>
-        {me?.email && (
+        {me?.email ? (
           <details className="account-menu">
             <summary className="account-summary" title={me.email}>
               <span className="account-name-full">{me.name || me.email}</span>
@@ -285,16 +278,17 @@ export default function App() {
             <div className="account-menu-body">
               <div className="account-email">{me.email}</div>
               <div className="account-role">{me.admin ? 'Admin' : 'User'}</div>
-              <p className="muted" style={{ margin: 0, fontSize: 12 }}>Signed in with Zoho</p>
-              <button type="button" className="btn ghost sm account-logout-mobile" onClick={doLogout}>
+              <p className="muted" style={{ margin: 0, fontSize: 12 }}>Signed in with your Circolife Zoho account</p>
+              <button type="button" className="btn ghost sm" onClick={doLogout}>
                 Log out
               </button>
             </div>
           </details>
+        ) : (
+          <button type="button" className="btn ghost sm logout-btn" onClick={doLogout}>
+            Log out
+          </button>
         )}
-        <button type="button" className="btn ghost sm logout-btn" onClick={doLogout}>
-          Log out
-        </button>
       </div>
 
       <div
@@ -325,9 +319,7 @@ export default function App() {
           </div>
         )}
 
-        <div className="map-brand-chip" aria-hidden>
-          circo<span>life</span>
-        </div>
+        <BrandMark compact product="" className="map-brand-chip" />
 
         <div className="map-mobile-tray">
           {mapMenu === 'insights' && (
@@ -360,7 +352,7 @@ export default function App() {
               ) : (
                 <>
                   <strong>{insightMode === 'untouched' ? 'Untouched' : 'Coverage'}</strong>
-                  <div className="legend-row"><span className="legend-swatch zone-untouched" /> No visits · has leads</div>
+                  <div className="legend-row"><span className="legend-swatch zone-untouched" /> Leads, no visits</div>
                   {insightMode === 'coverage' && (
                     <>
                       <div className="legend-row"><span className="legend-swatch zone-thin" /> Thin vs leads</div>
@@ -409,7 +401,7 @@ export default function App() {
               onClick={() => setMapMenu((m) => (m === 'insights' ? null : 'insights'))}
             >
               <IconInsights />
-              <span>{insightMode === 'off' ? 'Insights' : insightLabel}</span>
+              <span>Insights</span>
             </button>
             <button
               type="button"
@@ -444,7 +436,7 @@ export default function App() {
                 ) : (
                   <>
                     <strong>{insightMode === 'untouched' ? 'Untouched' : 'Coverage'}</strong>
-                    <div className="legend-row"><span className="legend-swatch zone-untouched" /> No visits · has leads</div>
+                    <div className="legend-row"><span className="legend-swatch zone-untouched" /> Leads, no visits</div>
                     {insightMode === 'coverage' && (
                       <>
                         <div className="legend-row"><span className="legend-swatch zone-thin" /> Thin vs leads</div>
@@ -459,7 +451,7 @@ export default function App() {
         </div>
 
         <div className={`map-status ${loading ? 'show' : ''}`} aria-live="polite">
-          Updating map…
+          Refreshing map…
         </div>
 
         {tab === 'map' && activeFilters.length > 0 && (

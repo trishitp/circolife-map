@@ -6,6 +6,7 @@ import { fetchLayer, fetchLayerFeature, fetchCoverageGrid } from '../lib/api';
 import { onSelection } from '../lib/selection';
 import { resolveBasemapStyle, LABEL_FONTS_BY_STYLE, attachGoogleAttribution } from '../lib/basemap';
 import { INDIA_BOUNDS, INDIA_CENTER, INDIA_DEFAULT_ZOOM, INDIA_MIN_ZOOM } from '../lib/mapBounds';
+import { loadAcIcons } from '../lib/acIcon';
 
 maplibregl.setWorkerUrl('/maplibre-worker.js');
 
@@ -75,22 +76,56 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
     },
   });
 
-  add(`${layer}-pts`, {
-    id: `${layer}-pts`,
-    type: 'circle',
-    source: srcId,
-    filter: ['!', ['has', 'point_count']],
-    paint: {
-      'circle-color': color,
-      'circle-opacity': [
-        'match', ['get', 'precision'],
-        'pincode', 0.32, 'inherited', 0.62, 'approx', 0.85, 'geocoded', 0.92, 0.97,
-      ],
-      'circle-stroke-width': ['match', ['get', 'precision'], 'pincode', 2.4, 1.75],
-      'circle-stroke-color': ['match', ['get', 'precision'], 'pincode', color, STROKE],
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 5, 11, 7, 15, 9],
-    },
-  });
+  if (layer === 'assets') {
+    add(`${layer}-pts`, {
+      id: `${layer}-pts`,
+      type: 'symbol',
+      source: srcId,
+      filter: ['!', ['has', 'point_count']],
+      layout: {
+        'icon-image': 'ac-pin',
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 5, 0.38, 11, 0.52, 15, 0.72],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'icon-anchor': 'center',
+      },
+      paint: {
+        'icon-opacity': [
+          'match', ['get', 'precision'],
+          'pincode', 0.5, 'territory', 0.5, 'inherited', 0.75, 1,
+        ],
+      },
+    });
+    add(`${layer}-cluster-icon`, {
+      id: `${layer}-cluster-icon`,
+      type: 'symbol',
+      source: srcId,
+      filter: ['has', 'point_count'],
+      layout: {
+        'icon-image': 'ac-glyph',
+        'icon-size': ['step', ['get', 'point_count'], 0.32, 25, 0.38, 100, 0.44],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+    });
+  } else {
+    add(`${layer}-pts`, {
+      id: `${layer}-pts`,
+      type: 'circle',
+      source: srcId,
+      filter: ['!', ['has', 'point_count']],
+      paint: {
+        'circle-color': color,
+        'circle-opacity': [
+          'match', ['get', 'precision'],
+          'pincode', 0.32, 'inherited', 0.62, 'approx', 0.85, 'geocoded', 0.92, 0.97,
+        ],
+        'circle-stroke-width': ['match', ['get', 'precision'], 'pincode', 2.4, 1.75],
+        'circle-stroke-color': ['match', ['get', 'precision'], 'pincode', color, STROKE],
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 5, 11, 7, 15, 9],
+      },
+    });
+  }
 
   if (!wired.has(layer)) {
     wired.add(layer);
@@ -438,8 +473,13 @@ export default function MapView({
       el.current.__circoMap = m;
       detachGoogle = attachGoogleAttribution(m, resolved);
 
-      const wire = () => {
+      const wire = async () => {
         if (cancelled) return;
+        try {
+          await loadAcIcons(m);
+        } catch (e) {
+          console.warn('[map] AC icon', e);
+        }
         ensureCoverage(m, wired, (p) => onSelectRef.current?.(p));
         for (const [layer, color] of Object.entries(LAYER_COLORS)) {
           ensureOverlay(m, layer, color, wired, (p) => onSelectRef.current?.(p), selectedId, indexes);
@@ -618,5 +658,5 @@ export default function MapView({
     });
   }), []);
 
-  return <div id="map" ref={el} role="application" aria-label="CircoLife territory map" />;
+  return <div id="map" ref={el} role="application" aria-label="Circolife Maps" />;
 }

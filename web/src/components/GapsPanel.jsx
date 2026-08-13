@@ -66,10 +66,10 @@ export default function GapsPanel({ onFocusMap }) {
       <header className="page-head">
         <div>
           <h1>Gaps</h1>
-          <p>Records we cannot place on the map — CRM address debt and inheritance failures.</p>
+          <p>Records that cannot be placed on the map because address or location data is missing.</p>
         </div>
         <button type="button" className="btn" onClick={exportCsv} disabled={!rows.length}>
-          Export page CSV
+          Export CSV
         </button>
       </header>
 
@@ -96,7 +96,7 @@ export default function GapsPanel({ onFocusMap }) {
 
       {summary?.byReason?.length > 0 && (
         <section className="soft-block">
-          <h2>Why they’re missing</h2>
+          <h2>Why they cannot be plotted</h2>
           <ul className="reason-list">
             {summary.byReason.slice(0, 8).map((r) => (
               <li key={`${r.layer}-${r.reason}`}>
@@ -111,8 +111,8 @@ export default function GapsPanel({ onFocusMap }) {
 
       {summary?.softGaps?.length > 0 && (
         <section className="soft-block">
-          <h2>Soft gaps (plotted, but weak precision)</h2>
-          <p className="muted">Pincode / approx / territory / inherited — usable for territory view, not door-level.</p>
+          <h2>Plotted with weak precision</h2>
+          <p className="muted">Pincode, approximate, territory, or inherited locations — useful for area view, not a street address.</p>
           <div className="chip-row">
             {summary.softGaps.map((s) => (
               <span key={`${s.layer}-${s.precision}`} className="chip static">
@@ -126,7 +126,7 @@ export default function GapsPanel({ onFocusMap }) {
       <div className="toolbar">
         <input
           className="input"
-          placeholder="Search title, owner, territory, id…"
+          placeholder="Search name, owner, territory, or ID"
           value={q}
           onChange={(e) => { setQ(e.target.value); setOffset(0); }}
         />

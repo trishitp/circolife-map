@@ -141,14 +141,13 @@ export default function RmCompareView({ options = {}, onOpenWalk }) {
       {error && <p className="banner err">{error}</p>}
       {loading && <p className="muted">Loading comparison…</p>}
       {rangeDays > 31 && (
-        <p className="banner err">Pick a range of 31 days or less for agent compare.</p>
+        <p className="banner err">Choose a date range of 31 days or less.</p>
       )}
 
       {meta && (
         <p className="muted">
           {meta.total} field agents · {meta.from} → {meta.to} (IST).
-          Path km uses check-in GPS only (not inherited pins).
-          Open walk uses the day that matches the current sort metric.
+          Distances use check-in GPS only. Open walk uses the day that matches the current sort.
         </p>
       )}
 

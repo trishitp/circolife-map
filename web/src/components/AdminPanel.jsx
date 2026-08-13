@@ -84,19 +84,19 @@ export default function AdminPanel({ me }) {
       <header className="page-head">
         <div>
           <h1>Admin</h1>
-          <p>Sync, geocode queue, cache, discrepancies rebuild, API cost, and manual pins.</p>
+          <p>Sync CRM data, manage geocodes, users, and estimated Maps API spend.</p>
         </div>
       </header>
 
       {error && <div className="banner err">{error}</div>}
       {msg && <div className="banner ok">{msg}</div>}
       {job?.status === 'running' && (
-        <div className="banner run">Job running: {job.kind}…</div>
+        <div className="banner run">Running {job.kind}…</div>
       )}
       {job?.status === 'ok' && job.result && (
         <div className="banner ok">
-          Last job ({job.kind}) ok
-          {job.result.upgraded != null && ` — upgraded ${job.result.upgraded}`}
+          Last {job.kind} completed
+          {job.result.upgraded != null && ` — ${job.result.upgraded} upgraded`}
           {job.durationMs != null && ` in ${(job.durationMs / 1000).toFixed(0)}s`}
         </div>
       )}
@@ -110,11 +110,10 @@ export default function AdminPanel({ me }) {
       {dash && (
         <>
           <section className="soft-block">
-            <h2>Zoho auth</h2>
+            <h2>Zoho connection</h2>
             <p className="muted">
-              Access tokens auto-refresh on every Zoho call (and ~60s before expiry).
-              Rotated refresh tokens are written to <code>.env</code> automatically.
-              If the stored refresh token is revoked, generate a Self Client code at{' '}
+              Access tokens refresh automatically. If the connection is revoked, generate a
+              Self Client code at{' '}
               <a href="https://api-console.zoho.in/" target="_blank" rel="noreferrer">
                 api-console.zoho.in
               </a>

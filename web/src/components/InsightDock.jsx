@@ -44,7 +44,7 @@ export default function InsightDock({ mode, days, onMode, onDays, summary }) {
           ))}
           {summary?.untouched != null && mode !== 'heat' && (
             <span className="insight-stat">
-              {summary.untouched} dark
+              {summary.untouched} untouched
             </span>
           )}
         </div>

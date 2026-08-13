@@ -1,5 +1,5 @@
 /**
- * In-app how-to guide for Circolife Maps.
+ * In-app guide for Circolife Maps.
  */
 export default function HelpGuide({ onOpenTab, isAdmin = false }) {
   const go = (id) => () => onOpenTab?.(id);
@@ -8,26 +8,26 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
     <div className="page-panel help-panel">
       <div className="page-head">
         <div>
-          <h1>How to use</h1>
+          <h1>Help</h1>
           <p>
-            Circolife Maps puts CRM locations on a shared India map so you can trust
-            coordinates, coach field routes, and share a day plan with RMs.
+            Circolife Maps places CRM leads, accounts, meetings, and assets on a shared
+            India map so field teams can trust locations, plan routes, and coach visits.
           </p>
         </div>
       </div>
 
       <div className="help-toc soft-block">
-        <strong>Jump to</strong>
+        <strong>On this page</strong>
         <nav className="help-toc-links">
           <a href="#help-map">Map</a>
-          <a href="#help-insights">Untouched zones</a>
+          <a href="#help-insights">Insights</a>
           <a href="#help-filters">Filters</a>
           <a href="#help-activity">Activity</a>
           <a href="#help-routes">Routes</a>
           <a href="#help-disc">Discrepancies</a>
           <a href="#help-gaps">Gaps</a>
           {isAdmin && <a href="#help-admin">Admin</a>}
-          <a href="#help-share">Share to RM</a>
+          <a href="#help-share">Share with field</a>
         </nav>
       </div>
 
@@ -38,45 +38,45 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
         </div>
         <ol className="help-steps">
           <li>
-            <strong>Toggle layers</strong>
-            <span>Leads, Accounts, Meetings, Assets — use the layer tiles. Counts are totals in the database (not viewport).</span>
+            <strong>Layers</strong>
+            <span>Turn Leads, Accounts, Meetings, and Assets on or off. Counts are totals in the database, not just what is on screen.</span>
           </li>
           <li>
-            <strong>Pan &amp; zoom</strong>
-            <span>Data loads for the visible area only. If a cream banner says “Zoom in… dense…”, the viewport has too many points — zoom tighter to see more of that area.</span>
+            <strong>Pan and zoom</strong>
+            <span>Data loads for the visible area. If a banner asks you to zoom in, the area is too dense to plot every point.</span>
           </li>
           <li>
-            <strong>Tap a pin</strong>
-            <span>Opens the detail card with owner, territory, precision, and Open in CRM when available.</span>
+            <strong>Select a pin</strong>
+            <span>Opens owner, territory, location precision, and Open in CRM when a link is available.</span>
           </li>
           <li>
-            <strong>Precision colours</strong>
-            <span>Exact/geocoded are strongest. Approx = check-in (~1 km). Pincode/territory are area-level. Inherited comes from a linked account or lead.</span>
+            <strong>Precision</strong>
+            <span>Exact and geocoded are street-level. Approximate is a check-in within about 1 km. Pincode and territory are area-level. Inherited comes from a linked account or lead.</span>
           </li>
         </ol>
       </section>
 
       <section id="help-insights" className="help-section soft-block">
         <div className="help-section-head">
-          <h2>Untouched zones &amp; insights</h2>
+          <h2>Insights</h2>
           <button type="button" className="btn ghost sm" onClick={go('map')}>Open Map</button>
         </div>
         <ol className="help-steps">
           <li>
             <strong>Untouched</strong>
-            <span>Red cells are pockets with plotted leads but no GPS check-in in the last 30 / 90 / 180 days. Tap a cell or an opportunity to fly there.</span>
+            <span>Areas with plotted leads but no GPS check-in in the last 30, 90, or 180 days.</span>
           </li>
           <li>
             <strong>Coverage</strong>
-            <span>Every cell with leads, coloured by visit ratio — red unused, amber thin, green covered.</span>
+            <span>Every cell with leads, coloured by visit ratio — unused, thin, or covered.</span>
           </li>
           <li>
             <strong>Visit heat</strong>
-            <span>Where RMs actually checked in. Combine with filters (RM, role, territory) to see one team’s footprint.</span>
+            <span>Where teams actually checked in. Combine with filters to see one person’s footprint.</span>
           </li>
           <li>
-            <strong>Ghost territories</strong>
-            <span>CRM territory names that have leads in view but zero check-ins in the window — often a naming / routing gap.</span>
+            <strong>Unvisited territories</strong>
+            <span>CRM territories that have leads in view but no check-ins in the selected period.</span>
           </li>
         </ol>
       </section>
@@ -89,19 +89,19 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
         <ol className="help-steps">
           <li>
             <strong>Open Filters</strong>
-            <span>Bottom-left on Map. Multi-select User status, CRM Role, RM name, Territory (7 metros), and Lead Source.</span>
+            <span>From the map tools. Multi-select user status, CRM role, RM, territory, and lead source.</span>
           </li>
           <li>
             <strong>Territory groups</strong>
-            <span>Delhi includes NCR (Noida, Gurugram, etc.). Mumbai includes Thane, Navi Mumbai, and the wider MMR.</span>
+            <span>Delhi includes NCR (Noida, Gurugram, and nearby). Mumbai includes Thane, Navi Mumbai, and the wider MMR.</span>
           </li>
           <li>
-            <strong>Apply &amp; Save</strong>
-            <span>Draft selections do nothing until you tap Apply. Save names a preset in this browser for reuse.</span>
+            <strong>Apply and save</strong>
+            <span>Selections apply only after you tap Apply. Save a named preset on this browser to reuse it.</span>
           </li>
           <li>
             <strong>Active chips</strong>
-            <span>Chips under the top bar show what is on. Tap × on a chip (or Clear all) to remove it instantly.</span>
+            <span>Chips on the map show what is on. Tap a chip, or Clear all, to remove it.</span>
           </li>
         </ol>
       </section>
@@ -114,11 +114,11 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
         <ol className="help-steps">
           <li>
             <strong>Compare</strong>
-            <span>Filter by Active/Inactive, CRM role, RM names, and the 7 metro territories, then compare check-in paths in a range of 31 days or less.</span>
+            <span>Filter by status, role, RM, and metro, then compare check-in paths for a range of up to 31 days.</span>
           </li>
           <li>
             <strong>Day walk</strong>
-            <span>Pick an RM (narrowed by Active/Inactive and CRM role), a date, and optional metro territory. Delhi includes NCR; Mumbai includes Thane / Navi Mumbai.</span>
+            <span>Pick an RM and a date to see that day’s check-in places and meetings.</span>
           </li>
         </ol>
       </section>
@@ -130,20 +130,20 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
         </div>
         <ol className="help-steps">
           <li>
-            <strong>Pick RM + date</strong>
-            <span>Narrow the RM list by Active/Inactive and CRM role, then load that day’s meetings. Metro territory and lead source apply to meetings and nearby drop-ins (Delhi = NCR, Mumbai = Thane / Navi Mumbai).</span>
+            <strong>Choose RM and date</strong>
+            <span>Load that day’s meetings. Territory and lead source also apply to nearby stops.</span>
           </li>
           <li>
             <strong>Build the plan</strong>
-            <span>Reorder stops, add nearby leads/accounts, remove unneeded ones.</span>
+            <span>Reorder stops, add nearby leads or accounts, and remove anything that is not needed.</span>
           </li>
           <li>
             <strong>Optimize</strong>
-            <span>Road-based order and drive time when Google Directions/Routes is enabled.</span>
+            <span>Orders stops by road time when Google Routes is enabled.</span>
           </li>
           <li>
-            <strong>Save &amp; Share to RM</strong>
-            <span>Creates a private mobile link. The RM only sees the map, Navigate, and CRM — no planner tools.</span>
+            <strong>Share with field</strong>
+            <span>Creates a private mobile link. The recipient sees the map, navigation, and CRM — not planner tools.</span>
           </li>
         </ol>
       </section>
@@ -154,12 +154,12 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
           <button type="button" className="btn ghost sm" onClick={go('disc')}>Open Discrepancies</button>
         </div>
         <p className="help-lead">
-          Plotted records where location sources disagree (billing vs shipping vs check-in vs MapMyIndia, etc.).
+          Plotted records where location sources disagree, such as billing versus shipping versus check-in versus MapMyIndia.
         </p>
         <ul className="help-bullets">
-          <li><strong>Watch</strong> — roughly ≥ 1 km between sources, or pin mismatch alone.</li>
-          <li><strong>Alert</strong> — roughly ≥ 3 km between sources.</li>
-          <li>Open CRM or jump to Map to inspect the pin.</li>
+          <li><strong>Watch</strong> — about 1 km or more between sources, or a pin mismatch.</li>
+          <li><strong>Alert</strong> — about 3 km or more between sources.</li>
+          <li>Open CRM or jump to the map to inspect the pin.</li>
         </ul>
       </section>
 
@@ -169,7 +169,7 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
           <button type="button" className="btn ghost sm" onClick={go('gaps')}>Open Gaps</button>
         </div>
         <p className="help-lead">
-          Records that cannot be plotted at all (no usable address, pin, territory, or coords). Fix address data in CRM, then resync / re-geocode from Admin.
+          Records that cannot be plotted because address, pin, territory, or coordinates are missing. Fix the data in CRM, then sync or re-geocode from Admin.
         </p>
       </section>
 
@@ -180,36 +180,35 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
           <button type="button" className="btn ghost sm" onClick={go('admin')}>Open Admin</button>
         </div>
         <ol className="help-steps">
-          <li><strong>Sync</strong> — pull latest Zoho Analytics data into the map store.</li>
-          <li><strong>Re-geocode</strong> — refresh street geocodes after fixes or API key unlocks.</li>
-          <li><strong>Rebuild discrepancies</strong> — recalculate multi-source distance checks.</li>
-          <li><strong>API cost</strong> — estimated Google Maps / geocode / Routes spend this month, plus a rate card you can edit.</li>
+          <li><strong>Sync</strong> — pull the latest Zoho Analytics data into Maps.</li>
+          <li><strong>Re-geocode</strong> — refresh street locations after address fixes.</li>
+          <li><strong>Rebuild discrepancies</strong> — recalculate distance checks across sources.</li>
+          <li><strong>API cost</strong> — estimated Google Maps spend this month, with an editable rate card.</li>
           <li><strong>Users</strong> — grant admin after people sign in with Zoho; disable accounts.</li>
-          <li><strong>Overrides</strong> — manually set lat/lng for known correct locations.</li>
+          <li><strong>Overrides</strong> — set latitude and longitude for a known-correct location.</li>
         </ol>
       </section>
       )}
 
       <section id="help-share" className="help-section soft-block">
         <div className="help-section-head">
-          <h2>Share to RM (mobile)</h2>
+          <h2>Share with field</h2>
           <button type="button" className="btn ghost sm" onClick={go('routes')}>Open Routes</button>
         </div>
         <ol className="help-steps">
-          <li>After Optimize, tap <strong>Share to RM</strong> — link is copied (and share sheet on mobile).</li>
-          <li>RM opens <code>#/r/…</code> — no app login required for that link.</li>
-          <li>Actions: map + stop list, <strong>Start full route</strong> / <strong>Navigate here</strong>, and <strong>Open CRM</strong>.</li>
+          <li>After Optimize, tap <strong>Share with field</strong> — the link is copied (and the share sheet opens on mobile).</li>
+          <li>The recipient opens the link with no Maps login required.</li>
+          <li>They can follow the full route, navigate to one stop, or open the record in CRM.</li>
         </ol>
       </section>
 
       <section className="help-section soft-block help-tips">
         <h2>Quick tips</h2>
         <ul className="help-bullets">
-          <li>India / IST dates everywhere we show “today” for field work.</li>
-          <li>If pins look empty, try widening filters (status/date) or turning another layer on.</li>
-          <li>Sign in with Zoho. Only admins see the Admin tab.</li>
-          <li>Session expires after logout — sign in again from Log out.</li>
-          <li>Google Maps open in a new tab for turn-by-turn navigation.</li>
+          <li>Field dates and times use India Standard Time.</li>
+          <li>If the map looks empty, widen filters or turn another layer on.</li>
+          <li>Sign in with Zoho. Only admins see Admin.</li>
+          <li>Google Maps opens in a new tab for turn-by-turn navigation.</li>
         </ul>
       </section>
     </div>

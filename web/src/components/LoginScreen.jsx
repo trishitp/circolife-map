@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchAuthStatus, login } from '../lib/api';
+import BrandMark from './BrandMark';
 
 export default function LoginScreen({ error: initialError, onSuccess }) {
   const [error, setError] = useState(initialError || null);
@@ -22,7 +23,7 @@ export default function LoginScreen({ error: initialError, onSuccess }) {
       const data = await login({ email, password });
       onSuccess?.(data.user || null);
     } catch (err) {
-      setError(err.message || 'Login failed');
+      setError(err.message || 'Could not sign in. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -31,20 +32,17 @@ export default function LoginScreen({ error: initialError, onSuccess }) {
   return (
     <div className="login-screen">
       <div className="login-card">
-        <div className="login-brand">
-          circo<span>life</span>
-          <small>maps</small>
-        </div>
-        <h1>Sign in</h1>
+        <BrandMark className="login-brand" />
+        <h1>Welcome back</h1>
         <p className="login-copy">
           {zoho
-            ? 'Use your Circolife Zoho account. Admin tools are only shown to admins.'
-            : 'Use the email and password from Admin → Users.'}
+            ? 'Sign in with your Circolife Zoho account to open Maps.'
+            : 'Enter the email and password issued for your Maps account.'}
         </p>
         {error && <div className="banner err">{error}</div>}
         {zoho ? (
           <a className="btn login-btn" href="/api/auth/zoho/start">
-            Sign in with Zoho
+            Continue with Zoho
           </a>
         ) : zoho === false ? (
           <form onSubmit={submitPassword}>

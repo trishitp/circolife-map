@@ -139,32 +139,40 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
 /* Brand mark */
 .brand {
   display: flex;
-  align-items: baseline;
-  gap: 2px;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: -0.03em;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
   color: var(--ink);
   background: var(--surface);
   backdrop-filter: blur(14px) saturate(1.2);
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
-  padding: 10px 16px 10px 14px;
+  padding: 8px 12px 8px 10px;
   border-radius: 14px;
   border: 1px solid var(--line);
   box-shadow: var(--shadow-soft);
-  animation: brand-in 0.45s ease-out both;
 }
-.brand span { color: var(--purple); }
-.brand small {
-  margin-left: 8px;
-  font-family: var(--font-body);
+.brand-logo {
+  display: block;
+  height: 36px;
+  width: auto;
+}
+.brand-mark {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.brand-product {
+  font-family: var(--font-display);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ink-soft);
-  opacity: 0.7;
+  color: var(--purple);
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(161, 73, 150, 0.1);
 }
 
 /* Layer + insight docks share one stack so they cannot overlap */
@@ -948,6 +956,14 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   box-shadow: 0 0 0 2px rgba(254, 249, 245, 0.15);
   flex-shrink: 0;
 }
+.layer-pill .ac-glyph {
+  display: grid;
+  place-items: center;
+  color: var(--pill-color, var(--layer-assets));
+  flex-shrink: 0;
+  line-height: 0;
+}
+.layer-pill.on .ac-glyph { color: #fff; }
 .layer-pill .count {
   font-family: var(--font-body);
   font-weight: 600;
@@ -1073,7 +1089,6 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   background: rgba(254, 249, 245, 0.14);
   color: #fff;
 }
-.insight-label-short { display: none; }
 .insight-stat {
   color: #f3c4bc;
   font-size: 11px;
@@ -1351,7 +1366,7 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
 @media (min-width: 901px) {
   .filter-panel {
     position: absolute;
-    top: 130px;
+    top: 12px;
     left: 16px;
     width: 360px;
     max-height: min(78vh, 720px);
@@ -1944,7 +1959,7 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   width: 340px;
   animation: rise 0.22s ease-out;
 }
-@media (min-width: 641px) { .detail-card { right: 16px; top: 130px; } }
+@media (min-width: 901px) { .detail-card { right: 16px; top: 12px; } }
 @media (max-width: 900px) {
   .detail-card {
     left: 10px;
@@ -1979,6 +1994,12 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   height: 8px;
   border-radius: 50%;
   background: var(--tag-color, var(--purple));
+}
+.detail-card .layer-tag .ac-glyph {
+  display: grid;
+  place-items: center;
+  color: var(--tag-color, var(--layer-assets));
+  line-height: 0;
 }
 .detail-card h3 {
   margin: 0 0 10px;
@@ -2151,6 +2172,49 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   50% { opacity: 1; }
 }
 
+/* Branded splash */
+.app-loader {
+  min-height: 100%;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 32px 20px calc(32px + var(--safe-b));
+}
+.app-loader .brand {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+.app-loader .brand-logo { height: 48px; }
+.app-loader-orbit {
+  width: 88px;
+  height: 48px;
+  color: var(--purple);
+}
+.app-loader-infinity { width: 100%; height: 100%; }
+.app-loader-loop {
+  stroke-dasharray: 160;
+  stroke-dashoffset: 160;
+  animation: circo-draw 1.6s ease-in-out infinite;
+}
+.app-loader-copy {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+@keyframes circo-draw {
+  0% { stroke-dashoffset: 160; opacity: 0.45; }
+  45% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: -160; opacity: 0.45; }
+}
+
 /* Login gate */
 .login-screen {
   min-height: 100%;
@@ -2170,22 +2234,13 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   gap: 10px;
 }
 .login-brand {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 22px;
-  letter-spacing: -0.03em;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
 }
-.login-brand span { color: var(--purple); }
-.login-brand small {
-  margin-left: 8px;
-  font-family: var(--font-body);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
+.login-brand .brand-logo { height: 44px; }
 .login-card h1 {
   margin: 0;
   font-family: var(--font-display);
@@ -3206,22 +3261,15 @@ a.login-btn {
   padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 8px;
 }
 .riq-brand {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 1.05rem;
-  letter-spacing: -0.02em;
-  color: #fff;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+  background: rgba(255, 252, 250, 0.92);
+  border: 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  padding: 6px 10px;
+  border-radius: 12px;
 }
-.riq-brand span { color: #9ad4e8; }
-.riq-brand em {
-  margin-left: 6px;
-  font-style: normal;
-  font-weight: 600;
-  font-size: 0.72rem;
-  opacity: 0.85;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.riq-brand .brand-product {
+  color: var(--ink);
+  background: rgba(46, 31, 64, 0.08);
 }
 .riq-date-chip {
   padding: 6px 10px;
@@ -3608,6 +3656,194 @@ a.login-btn {
   }
 }
 
+/* Desktop app chrome — one bar, one dock, no overlapping floats */
+@media (min-width: 901px) {
+  .top-chrome {
+    position: relative;
+    background: rgba(255, 252, 250, 0.94);
+    backdrop-filter: blur(16px) saturate(1.2);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    border-bottom: 1px solid var(--line);
+    padding: 10px 18px;
+    gap: 12px;
+  }
+  .app-shell.is-map .top-chrome {
+    position: relative;
+  }
+  .brand {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0 2px 0 0;
+    animation: none;
+  }
+  .app-tabs {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+    background: rgba(46, 31, 64, 0.05);
+    box-shadow: none;
+  }
+  .account-menu { margin-left: auto; }
+  .account-summary {
+    max-width: 180px;
+    background: rgba(46, 31, 64, 0.05);
+  }
+  .account-logout-mobile { display: none; }
+  .logout-btn { margin-left: auto; }
+
+  .map-chrome-docks {
+    top: 12px;
+    max-width: min(880px, calc(100% - 32px));
+    background: rgba(255, 252, 250, 0.94);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 8px;
+    box-shadow: var(--shadow);
+    gap: 6px;
+    animation: none;
+  }
+  .map-shell.has-issue .map-chrome-docks { top: 64px; }
+  .map-shell.has-filter-chips .map-chrome-docks { top: 56px; }
+  .map-shell.has-issue.has-filter-chips .map-chrome-docks { top: 108px; }
+
+  .layer-dock {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    justify-content: center;
+  }
+  .layer-pill {
+    color: var(--ink-soft);
+    background: rgba(46, 31, 64, 0.05);
+  }
+  .layer-pill .dot {
+    box-shadow: 0 0 0 2px rgba(46, 31, 64, 0.08);
+  }
+  .layer-pill:hover {
+    color: var(--ink);
+    background: rgba(46, 31, 64, 0.1);
+  }
+  .layer-pill.on {
+    color: #fff;
+    background: var(--ink);
+    box-shadow: none;
+  }
+
+  .insight-dock { align-items: stretch; }
+  .insight-modes,
+  .insight-days {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    overflow: visible;
+    background: rgba(46, 31, 64, 0.05);
+    border: 0;
+    box-shadow: none;
+  }
+  .insight-pill {
+    color: var(--ink-soft);
+    min-width: 0;
+  }
+  .insight-pill.on {
+    background: var(--ink);
+    color: #fff;
+  }
+  .insight-stat { color: var(--purple); }
+
+  .map-issue.map-issue-top {
+    top: 12px;
+  }
+  .map-filter-chips {
+    top: 12px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    justify-content: center;
+    max-width: min(880px, calc(100% - 32px));
+  }
+  .map-shell.has-issue .map-filter-chips { top: 64px; }
+  .map-status { top: 88px; }
+  .map-shell.has-issue .map-status,
+  .map-shell.has-filter-chips .map-status { top: 132px; }
+
+  .filter-fab {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    z-index: 5;
+  }
+  .opp-fab {
+    position: absolute;
+    left: 154px;
+    bottom: 16px;
+    z-index: 5;
+  }
+  .map-legend {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+  }
+  .opp-panel {
+    top: 12px;
+    left: auto;
+    right: 16px;
+  }
+  .map-shell.filters-open .map-chrome-docks,
+  .map-shell.filters-open .map-filter-chips,
+  .map-shell.has-opp .map-chrome-docks {
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .map-shell.has-selected .map-chrome-docks {
+    left: 16px;
+    right: auto;
+    transform: none;
+    max-width: min(560px, calc(100% - 390px));
+  }
+  .map-shell.has-selected .map-legend { visibility: hidden; }
+  .maplibregl-ctrl-bottom-right {
+    top: 12px;
+    right: 12px;
+    bottom: auto;
+  }
+  .map-shell.has-selected .maplibregl-ctrl-bottom-right,
+  .map-shell.has-opp .maplibregl-ctrl-bottom-right,
+  .map-shell.filters-open .maplibregl-ctrl-bottom-right {
+    top: auto;
+    bottom: calc(16px + var(--safe-b));
+    right: 16px;
+  }
+  .maplibregl-ctrl-bottom-left { display: none; }
+  .google-maps-logo {
+    left: 16px;
+    bottom: calc(68px + var(--safe-b));
+  }
+}
+@media (min-width: 901px) and (max-width: 1100px) {
+  .map-chrome-docks {
+    left: 12px;
+    right: 12px;
+    transform: none;
+    max-width: none;
+  }
+  .map-shell.has-selected .map-chrome-docks {
+    right: auto;
+    max-width: min(520px, calc(100% - 380px));
+  }
+  .map-filter-chips {
+    left: 12px;
+    right: 12px;
+    transform: none;
+    max-width: none;
+  }
+  .opp-fab { left: 148px; }
+}
+
 /* Mobile app chrome — last so it wins over later desktop rules */
 @media (max-width: 900px) {
   html, body {
@@ -3621,27 +3857,23 @@ a.login-btn {
 
   .map-brand-chip {
     display: inline-flex;
-    align-items: baseline;
+    align-items: center;
     position: absolute;
     top: calc(10px + env(safe-area-inset-top, 0px));
     left: 10px;
     z-index: 6;
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: 13px;
-    letter-spacing: -0.03em;
-    color: var(--ink);
     background: rgba(255, 252, 250, 0.92);
     backdrop-filter: blur(16px) saturate(1.2);
     -webkit-backdrop-filter: blur(16px) saturate(1.2);
     border: 1px solid var(--line);
     border-radius: 12px;
-    padding: 7px 11px;
+    padding: 6px;
     box-shadow: var(--shadow-soft);
     pointer-events: none;
     user-select: none;
+    gap: 0;
   }
-  .map-brand-chip span { color: var(--purple); }
+  .map-brand-chip .brand-mark { width: 26px; height: 26px; }
   .map-shell.has-issue .map-brand-chip { display: none; }
 
   .map-status {
@@ -3777,6 +4009,56 @@ a.login-btn {
   }
   .opp-fab .opp-fab-full { display: none; }
   .opp-fab .opp-fab-short { display: inline; }
+
+  .insight-label-full { display: none; }
+  .insight-label-short { display: inline; }
+  .map-tool-sheet {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .map-tool-sheet .insight-dock {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .map-tool-sheet .insight-modes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    max-width: 100%;
+    background: rgba(46, 31, 64, 0.06);
+    border: 0;
+    box-shadow: none;
+    overflow: hidden;
+  }
+  .map-tool-sheet .insight-days {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 100%;
+    background: rgba(46, 31, 64, 0.06);
+    border: 0;
+    box-shadow: none;
+    overflow: hidden;
+  }
+  .map-tool-sheet .insight-pill {
+    min-width: 0;
+    width: 100%;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .map-tool-sheet .insight-pill.on {
+    background: var(--ink);
+    color: #fff;
+  }
+  .map-tool-sheet .insight-stat {
+    color: var(--purple);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
   .mobile-nav {
     display: flex;

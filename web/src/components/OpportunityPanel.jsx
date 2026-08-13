@@ -26,13 +26,13 @@ export default function OpportunityPanel({
         <button type="button" className="filter-close" onClick={onClose} aria-label="Close">×</button>
       </div>
       <p className="filter-hint">
-        Highest-lead cells with little or no check-in in the last {days} days. Tap to fly there.
+        Highest-lead areas with little or no check-in in the last {days} days. Tap to go there.
       </p>
-      {empty && <p className="filter-empty">Zoom into a city to score zones.</p>}
+      {empty && <p className="filter-empty">Zoom into a city to see ranked areas.</p>}
 
       {top.length > 0 && (
         <>
-          <h4>Hot cells</h4>
+          <h4>Priority areas</h4>
           <ul className="opp-list">
             {top.map((z) => (
               <li key={z.id}>
@@ -68,13 +68,13 @@ export default function OpportunityPanel({
 
       {ghosts.length > 0 && (
         <>
-          <h4>Ghost territories</h4>
-          <p className="filter-hint">Named territories with leads but zero GPS check-ins in this window.</p>
+          <h4>Unvisited territories</h4>
+          <p className="filter-hint">Territories with leads on the map but no GPS check-ins in this period.</p>
           <ul className="opp-list">
             {ghosts.map((g) => (
               <li key={g.territory}>
                 <div className="opp-item kind-untouched static">
-                  <span className="opp-kind untouched">Ghost</span>
+                  <span className="opp-kind untouched">Unvisited</span>
                   <strong>{g.territory}</strong>
                   <span>{g.leads} plotted leads · no check-ins</span>
                 </div>

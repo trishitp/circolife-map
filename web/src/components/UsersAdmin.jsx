@@ -42,8 +42,8 @@ export default function UsersAdmin({ me }) {
     <section className="soft-block">
       <h2>Users</h2>
       <p className="muted">
-        People appear here after they sign in with Zoho. Grant Admin to those who
-        should see this tab. Emails in <code>ADMIN_EMAILS</code> always stay admin.
+        People appear here after they sign in with Zoho. Grant Admin to anyone who
+        should manage sync and users. Emails listed in <code>ADMIN_EMAILS</code> always remain admin.
       </p>
       {error && <div className="banner err">{error}</div>}
 
@@ -96,7 +96,7 @@ export default function UsersAdmin({ me }) {
             ))}
             {!users.length && (
               <tr>
-                <td colSpan={7} className="muted">No one has signed in with Zoho yet.</td>
+                <td colSpan={7} className="muted">No one has signed in yet.</td>
               </tr>
             )}
           </tbody>

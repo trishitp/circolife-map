@@ -528,7 +528,7 @@ export default function FilterPanel({ options, filters, setFilters, open, setOpe
             open={openSections.source}
             onToggle={toggleSection}
           >
-            <p className="filter-hint">Lead source — meetings, accounts and assets stay visible.</p>
+            <p className="filter-hint">Applies to leads. Meetings, accounts, and assets stay visible.</p>
             {sources.length > 8 && (
               <input
                 className="filter-search"
@@ -569,7 +569,7 @@ export default function FilterPanel({ options, filters, setFilters, open, setOpe
               />
 
               <h4>Meeting type</h4>
-              <p className="filter-hint">Meetings layer only.</p>
+              <p className="filter-hint">Applies to meetings only.</p>
               <div className="chip-row">
                 {[['Normal', 'false'], ['Joint', 'true']].map(([label, v]) => (
                   <button
@@ -627,7 +627,7 @@ export default function FilterPanel({ options, filters, setFilters, open, setOpe
               <input
                 className="filter-search"
                 type="text"
-                placeholder="Name this filter…"
+                placeholder="Name this view"
                 value={presetName}
                 onChange={(e) => setPresetName(e.target.value)}
                 aria-label="Saved filter name"
