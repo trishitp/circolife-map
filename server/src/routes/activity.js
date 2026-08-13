@@ -107,12 +107,12 @@ activity.get('/compare', async (req, res) => {
     const extra = [];
     const terrSql = sqlTerritoryGroups(params, req.query.territory);
     if (terrSql) extra.push(terrSql);
-    const owners = parseList(req.query.owner);
-    if (owners.length === 1) {
-      params.push(owners[0]);
+    const ownerFilter = parseList(req.query.owner);
+    if (ownerFilter.length === 1) {
+      params.push(ownerFilter[0]);
       extra.push(`owner_name = $${params.length}`);
-    } else if (owners.length > 1) {
-      params.push(owners);
+    } else if (ownerFilter.length > 1) {
+      params.push(ownerFilter);
       extra.push(`owner_name = ANY($${params.length}::text[])`);
     }
     const crmSql = sqlCrmUsers(params, req.query);
