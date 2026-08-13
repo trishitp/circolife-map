@@ -1,5 +1,5 @@
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
-import { fetchMapsSession } from './api';
+import { fetchMapsSession, reportClientUsage } from './api';
 import { INDIA_BOUNDS, INDIA_CENTER, INDIA_DEFAULT_ZOOM, INDIA_MIN_ZOOM } from './mapBounds';
 
 let loaderPromise = null;
@@ -21,6 +21,7 @@ export async function loadGoogleMaps() {
       });
       // Ensures Maps JS is bootstrapped; Map lives on window.google.maps after this.
       await importLibrary('maps');
+      reportClientUsage('maps_js_load').catch(() => {});
       return window.google.maps;
     })().catch((err) => {
       loaderPromise = null;

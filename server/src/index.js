@@ -3,7 +3,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { cfg } from './config.js';
-import { auth, requireAuth } from './auth.js';
+import { auth, requireAuth, requireAdmin } from './auth.js';
+import { ensureBootstrapAdmin } from './accounts.js';
 import { layers } from './routes/layers.js';
 import { meta } from './routes/meta.js';
 import { gaps } from './routes/gaps.js';
@@ -64,7 +65,7 @@ app.use('/api/discrepancies', discrepancies);
 app.use('/api/activity', activity);
 app.use('/api/routes', routePlanning);
 app.use('/api/coverage', coverage);
-app.use('/api/admin', admin);
+app.use('/api/admin', requireAdmin, admin);
 
 // Optional production SPA (set WEB_DIST or use default ../web/dist)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -107,10 +108,11 @@ process.on('uncaughtException', (err) => {
   if (cfg.isProd) process.exit(1);
 });
 
-app.listen(cfg.port, () => {
+app.listen(cfg.port, async () => {
+  const boot = await ensureBootstrapAdmin();
   console.log(
     `circolife-maps api on :${cfg.port}`
-    + `${cfg.appPassword ? ' (auth on)' : ' (auth open)'}`
+    + `${cfg.appPassword || boot.count ? ' (auth on)' : ' (auth open)'}`
     + `${webDist ? ' + spa' : ''}`,
   );
 });

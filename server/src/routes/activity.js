@@ -7,6 +7,9 @@ import {
   buildWalkPayload,
   aggregateOwner,
 } from '../activity/metrics.js';
+import {
+  parseList, sqlTerritoryGroups, sqlCrmUsers,
+} from '../filters/mapFilters.js';
 
 export const activity = Router();
 
@@ -29,6 +32,12 @@ activity.get('/walk', async (req, res) => {
       return res.status(400).json({ error: e.message });
     }
 
+    const params = [owner, bounds.start, bounds.end];
+    const extra = [];
+    const terrSql = sqlTerritoryGroups(params, req.query.territory);
+    if (terrSql) extra.push(terrSql);
+    const extraSql = extra.length ? ` AND ${extra.join(' AND ')}` : '';
+
     const { rows } = await q(
       `SELECT ${MEETING_COLS}
        FROM map_points
@@ -36,13 +45,14 @@ activity.get('/walk', async (req, res) => {
          AND owner_name = $1
          AND record_ts >= $2::timestamptz
          AND record_ts <= $3::timestamptz
+         ${extraSql}
        ORDER BY
          COALESCE(
            NULLIF(extra->>'checkin_time', '')::timestamptz,
            record_ts
          ) ASC NULLS LAST,
          source_id ASC`,
-      [owner, bounds.start, bounds.end],
+      params,
     );
 
     const meetings = rows.map((r, i) => normalizeStop(r, i + 1));
@@ -87,7 +97,6 @@ activity.get('/compare', async (req, res) => {
       return res.status(400).json({ error: 'compare range must be 31 days or less' });
     }
 
-    const territory = (req.query.territory || '').trim();
     const sort = (req.query.sort || 'path_km').trim();
     const allowedSort = new Set(['path_km', 'checkin_rate', 'late_rate', 'meetings']);
     if (!allowedSort.has(sort)) {
@@ -95,11 +104,20 @@ activity.get('/compare', async (req, res) => {
     }
 
     const params = [bounds.start, bounds.end];
-    let terrClause = '';
-    if (territory) {
-      params.push(territory);
-      terrClause = ` AND territory = $${params.length}`;
+    const extra = [];
+    const terrSql = sqlTerritoryGroups(params, req.query.territory);
+    if (terrSql) extra.push(terrSql);
+    const owners = parseList(req.query.owner);
+    if (owners.length === 1) {
+      params.push(owners[0]);
+      extra.push(`owner_name = $${params.length}`);
+    } else if (owners.length > 1) {
+      params.push(owners);
+      extra.push(`owner_name = ANY($${params.length}::text[])`);
     }
+    const crmSql = sqlCrmUsers(params, req.query);
+    if (crmSql) extra.push(crmSql);
+    const extraSql = extra.length ? ` AND ${extra.join(' AND ')}` : '';
 
     const { rows } = await q(
       `SELECT ${MEETING_COLS}
@@ -108,7 +126,7 @@ activity.get('/compare', async (req, res) => {
          AND owner_name IS NOT NULL AND owner_name <> ''
          AND record_ts >= $1::timestamptz
          AND record_ts <= $2::timestamptz
-         ${terrClause}`,
+         ${extraSql}`,
       params,
     );
 
@@ -132,7 +150,9 @@ activity.get('/compare', async (req, res) => {
     res.json({
       from,
       to,
-      territory: territory || null,
+      territory: parseList(req.query.territory).join(',') || null,
+      role: parseList(req.query.role).join(',') || null,
+      userStatus: parseList(req.query.userStatus).join(',') || null,
       sort,
       timezone: 'Asia/Kolkata',
       total_owners: owners.length,

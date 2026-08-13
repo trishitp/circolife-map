@@ -12,6 +12,7 @@ import {
 } from '../lib/api';
 import { decodePolyline } from '../lib/polyline';
 import RouteMap from './RouteMap';
+import PeopleFilters from './PeopleFilters';
 
 function todayIST() {
   try {
@@ -51,11 +52,14 @@ function fmtMin(v) {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
-export default function RoutePlanView({ owners = [], territories = [] }) {
+export default function RoutePlanView({ options = {} }) {
   const [owner, setOwner] = useState('');
   const [ownerQ, setOwnerQ] = useState('');
   const [date, setDate] = useState(todayIST());
-  const [territory, setTerritory] = useState('');
+  const [territory, setTerritory] = useState([]);
+  const [userStatus, setUserStatus] = useState([]);
+  const [role, setRole] = useState([]);
+  const [source, setSource] = useState([]);
   const [radiusKm, setRadiusKm] = useState(3);
 
   const [loading, setLoading] = useState(false);
@@ -79,12 +83,6 @@ export default function RoutePlanView({ owners = [], territories = [] }) {
   const [selectedId, setSelectedId] = useState(null);
   const [unmapped, setUnmapped] = useState([]);
 
-  const filteredOwners = useMemo(() => {
-    const q = ownerQ.trim().toLowerCase();
-    if (!q) return owners.slice(0, 80);
-    return owners.filter((o) => o.toLowerCase().includes(q)).slice(0, 80);
-  }, [owners, ownerQ]);
-
   const legByTo = useMemo(() => {
     const m = new Map();
     for (const L of legs) if (L.toId) m.set(L.toId, L);
@@ -102,7 +100,8 @@ export default function RoutePlanView({ owners = [], territories = [] }) {
       const data = await fetchRouteCandidates({
         owner,
         date,
-        territory: territory || undefined,
+        territory: territory.length ? territory.join(',') : undefined,
+        source: source.length ? source.join(',') : undefined,
         radiusKm,
       });
       setCandidates(data);
@@ -160,11 +159,11 @@ export default function RoutePlanView({ owners = [], territories = [] }) {
     } finally {
       setLoading(false);
     }
-  }, [owner, date, territory, radiusKm]);
+  }, [owner, date, territory, source, radiusKm]);
 
   useEffect(() => {
     if (owner && date) load();
-  }, [owner, date]); // eslint-disable-line react-hooks/exhaustive-deps -- manual reload for territory/radius
+  }, [owner, date, territory, source]); // eslint-disable-line react-hooks/exhaustive-deps -- radius via Load
 
   const addToPlan = (stop) => {
     if (planIdSet.has(stop.id)) return;
@@ -349,7 +348,8 @@ export default function RoutePlanView({ owners = [], territories = [] }) {
         lat: stop.lat,
         lng: stop.lng,
         radiusKm,
-        territory: territory || undefined,
+        territory: territory.length ? territory.join(',') : undefined,
+        source: source.length ? source.join(',') : undefined,
         layers: 'leads,accounts',
       });
       setNearby(data.stops || []);
@@ -367,31 +367,6 @@ export default function RoutePlanView({ owners = [], territories = [] }) {
     <div className="routes-plan">
       <div className="toolbar activity-toolbar">
         <div className="activity-field">
-          <label htmlFor="route-owner-search">Field agent (RM)</label>
-          <input
-            id="route-owner-search"
-            className="input"
-            type="search"
-            placeholder="Search agents…"
-            value={ownerQ}
-            onChange={(e) => setOwnerQ(e.target.value)}
-          />
-          <select
-            className="input"
-            value={owner}
-            onChange={(e) => setOwner(e.target.value)}
-            aria-label="Select field agent"
-          >
-            <option value="">Select agent…</option>
-            {owner && !owners.includes(owner) && (
-              <option value={owner}>{owner}</option>
-            )}
-            {filteredOwners.map((o) => (
-              <option key={o} value={o}>{o}</option>
-            ))}
-          </select>
-        </div>
-        <div className="activity-field">
           <label htmlFor="route-date">Date (IST)</label>
           <input
             id="route-date"
@@ -400,20 +375,6 @@ export default function RoutePlanView({ owners = [], territories = [] }) {
             value={date}
             onChange={(e) => setDate(e.target.value)}
           />
-        </div>
-        <div className="activity-field">
-          <label htmlFor="route-terr">Territory</label>
-          <select
-            id="route-terr"
-            className="input"
-            value={territory}
-            onChange={(e) => setTerritory(e.target.value)}
-          >
-            <option value="">All</option>
-            {territories.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
         </div>
         <div className="activity-field">
           <label htmlFor="route-radius">Nearby km</label>
@@ -456,6 +417,23 @@ export default function RoutePlanView({ owners = [], territories = [] }) {
           </button>
         </div>
       </div>
+      <PeopleFilters
+        options={options}
+        userStatus={userStatus}
+        onUserStatus={setUserStatus}
+        role={role}
+        onRole={setRole}
+        owner={owner}
+        onOwner={setOwner}
+        ownerQ={ownerQ}
+        onOwnerQ={setOwnerQ}
+        ownerMode="single"
+        territory={territory}
+        onTerritory={setTerritory}
+        source={source}
+        onSource={setSource}
+        showSource
+      />
 
       {error && <p className="banner err">{error}</p>}
       {msg && !error && <p className="banner ok">{msg}</p>}

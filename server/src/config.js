@@ -43,15 +43,20 @@ export const cfg = {
   geocoder: process.env.GEOCODER || 'google',
   olaKey: process.env.OLAMAPS_API_KEY,
   googleKey: process.env.GOOGLE_MAPS_API_KEY,
-  /** Single app password — gates all /api/* when set. */
+  /** Shared secret still used to bootstrap the first admin (and HMAC fallback). */
   appPassword: process.env.APP_PASSWORD || '',
   /**
-   * Optional second secret for Admin mutations (sync, regeocode, cache wipe).
-   * When set, admin write routes require header X-Admin-Token.
+   * Optional second secret for Admin mutations from scripts (X-Admin-Token).
+   * Browser admins use their logged-in account instead.
    */
   adminToken: process.env.ADMIN_TOKEN || '',
   /** HMAC secret for session tokens (defaults to APP_PASSWORD). */
   sessionSecret: process.env.SESSION_SECRET || '',
+  /** Comma-separated emails that are always treated as admin. */
+  adminEmails: process.env.ADMIN_EMAILS || '',
+  /** First admin created when app_accounts is empty. */
+  bootstrapAdminEmail: process.env.BOOTSTRAP_ADMIN_EMAIL || '',
+  bootstrapAdminPassword: process.env.BOOTSTRAP_ADMIN_PASSWORD || '',
 };
 
 // Prefer APP_PASSWORD; fall back to ADMIN_TOKEN only if APP_PASSWORD empty (legacy)

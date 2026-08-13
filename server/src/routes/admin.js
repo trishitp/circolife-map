@@ -7,6 +7,10 @@ import { refreshTerritoryCentroids } from '../geocode/pipeline.js';
 import { rebuildDiscrepancies } from '../discrepancy/engine.js';
 import { exchangeAuthCode, getAccessToken, zohoAuthStatus } from '../zoho/analyticsClient.js';
 import { requireAdminWrite } from '../auth.js';
+import { usageSummary, saveRates } from '../usage/meter.js';
+import {
+  listAccounts, createAccount, updateAccount,
+} from '../accounts.js';
 
 export const admin = Router();
 // Auth is enforced app-wide by requireAuth; writes may also need ADMIN_TOKEN.
@@ -263,4 +267,74 @@ admin.get('/points/search', async (req, res) => {
   sql += ` ORDER BY updated_at DESC LIMIT 40`;
   const { rows } = await q(sql, params);
   res.json(rows);
+});
+
+admin.get('/usage', async (_req, res) => {
+  try {
+    const summary = await usageSummary();
+    const failed = await q(`SELECT COUNT(*)::int AS n FROM geocode_cache WHERE failed = TRUE`);
+    const geoRate = summary.rates.skus.geocoding || 0;
+    const regeocodeUnits = (failed.rows[0]?.n || 0);
+    res.json({
+      ...summary,
+      estimates: {
+        failedCache: failed.rows[0]?.n || 0,
+        regeocodeUsd: (regeocodeUnits * geoRate) / 1000,
+        regeocodeInr: ((regeocodeUnits * geoRate) / 1000) * summary.rates.usdInr,
+      },
+    });
+  } catch (e) {
+    console.error('[admin/usage]', e);
+    res.status(500).json({ error: e.message || 'usage failed' });
+  }
+});
+
+admin.post('/usage/rates', async (req, res) => {
+  try {
+    const rates = await saveRates(req.body || {});
+    res.json({ ok: true, rates });
+  } catch (e) {
+    console.error('[admin/usage/rates]', e);
+    res.status(500).json({ error: e.message || 'save rates failed' });
+  }
+});
+
+admin.get('/users', async (_req, res) => {
+  try {
+    res.json({ users: await listAccounts() });
+  } catch (e) {
+    console.error('[admin/users]', e);
+    res.status(500).json({ error: e.message || 'users failed' });
+  }
+});
+
+admin.post('/users', async (req, res) => {
+  try {
+    const user = await createAccount({
+      email: req.body?.email,
+      name: req.body?.name,
+      password: req.body?.password,
+      isAdmin: Boolean(req.body?.isAdmin),
+    });
+    res.json({ ok: true, user });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || 'create user failed' });
+  }
+});
+
+admin.patch('/users/:id', async (req, res) => {
+  try {
+    if (req.user?.id && String(req.user.id) === String(req.params.id) && req.body?.active === false) {
+      return res.status(400).json({ error: 'cannot disable your own account' });
+    }
+    const user = await updateAccount(req.params.id, {
+      name: req.body?.name,
+      isAdmin: req.body?.isAdmin,
+      active: req.body?.active,
+      password: req.body?.password,
+    });
+    res.json({ ok: true, user });
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message || 'update user failed' });
+  }
 });

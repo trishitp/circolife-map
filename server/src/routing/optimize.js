@@ -2,6 +2,7 @@
 // Prefers Routes API (v2); falls back to classic Directions API when Routes is disabled.
 import { cfg } from '../config.js';
 import { haversineKm } from '../activity/metrics.js';
+import { recordUsage } from '../usage/meter.js';
 
 const ROUTES_URL = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 const DIRECTIONS_URL = 'https://maps.googleapis.com/maps/api/directions/json';
@@ -199,6 +200,13 @@ async function tryRoutesApi({ origin, intermediates, destination, useOptimize, d
       body: JSON.stringify(body),
     });
     j = await r.json().catch(() => ({}));
+    recordUsage({
+      sku: 'routes',
+      provider: 'google',
+      units: 1,
+      ok: r.ok,
+      meta: { status: r.status, stops: intermediates.length + 1 },
+    });
     if (!r.ok) {
       const msg = j?.error?.message || j?.message || `Google Routes ${r.status}`;
       console.warn('[optimize] Google Routes error:', msg);
@@ -280,6 +288,13 @@ async function tryDirectionsApi({ origin, intermediates, destination, useOptimiz
     }
     const r = await fetch(`${DIRECTIONS_URL}?${params}`);
     const j = await r.json().catch(() => ({}));
+    recordUsage({
+      sku: 'directions',
+      provider: 'google',
+      units: 1,
+      ok: j.status === 'OK',
+      meta: { status: j.status },
+    });
     if (j.status !== 'OK' || !j.routes?.[0]) {
       const msg = j.error_message || j.status || `Directions ${r.status}`;
       console.warn('[optimize] Google Directions error:', msg);

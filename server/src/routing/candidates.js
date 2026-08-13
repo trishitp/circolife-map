@@ -1,6 +1,7 @@
 // Candidate stops for route planning from map_points.
 import { q } from '../db.js';
 import { dayBoundsIST, haversineKm } from '../activity/metrics.js';
+import { parseList, sqlTerritoryGroups } from '../filters/mapFilters.js';
 
 /** Precisions allowed for auto plan / optimize (not weak centroids). */
 export const PLAN_OK = new Set(['exact', 'geocoded', 'approx']);
@@ -53,11 +54,10 @@ function rowToStop(row, layer, opts = {}) {
 export async function loadDayMeetings({ owner, date, territory }) {
   const bounds = dayBoundsIST(date);
   const params = [owner, bounds.start, bounds.end];
-  let terr = '';
-  if (territory) {
-    params.push(territory);
-    terr = ` AND territory = $${params.length}`;
-  }
+  const extra = [];
+  const terrSql = sqlTerritoryGroups(params, territory);
+  if (terrSql) extra.push(terrSql);
+  const extraSql = extra.length ? ` AND ${extra.join(' AND ')}` : '';
 
   const { rows } = await q(
     `SELECT ${MEETING_COLS}
@@ -66,7 +66,7 @@ export async function loadDayMeetings({ owner, date, territory }) {
        AND owner_name = $1
        AND record_ts >= $2::timestamptz
        AND record_ts <= $3::timestamptz
-       ${terr}
+       ${extraSql}
      ORDER BY record_ts ASC NULLS LAST, source_id ASC`,
     params,
   );
@@ -114,7 +114,7 @@ export async function loadDayMeetings({ owner, date, territory }) {
  * Nearby leads/accounts around a point (Explore nearest / drop-ins).
  */
 export async function loadNearby({
-  lat, lng, radiusKm = 3, layers = ['leads', 'accounts'], owner, territory, limit = 40,
+  lat, lng, radiusKm = 3, layers = ['leads', 'accounts'], owner, territory, source, limit = 40,
 }) {
   const la = Number(lat);
   const ln = Number(lng);
@@ -137,11 +137,15 @@ export async function loadNearby({
     // Match owner OR (no owner filter for territory-wide drop-ins when only territory set)
     ownerClause = ` AND (owner_name = $${params.length} OR owner_name IS NULL OR owner_name = '')`;
   }
-  let terrClause = '';
-  if (territory) {
-    params.push(territory);
-    terrClause = ` AND territory = $${params.length}`;
+  const extra = [];
+  const terrSql = sqlTerritoryGroups(params, territory);
+  if (terrSql) extra.push(terrSql);
+  const sources = parseList(source);
+  if (sources.length) {
+    params.push(sources);
+    extra.push(`(layer <> 'leads' OR extra->>'source' = ANY($${params.length}::text[]))`);
   }
+  const extraSql = extra.length ? ` AND ${extra.join(' AND ')}` : '';
 
   const { rows } = await q(
     `SELECT layer, source_id, title, owner_name, territory, status, record_ts,
@@ -153,7 +157,7 @@ export async function loadNearby({
        AND lat BETWEEN $2 AND $3
        AND lng BETWEEN $4 AND $5
        ${ownerClause}
-       ${terrClause}
+       ${extraSql}
      LIMIT 400`,
     params,
   );
@@ -181,17 +185,17 @@ export async function loadNearby({
  * Combined candidates payload for Routes UI load.
  */
 export async function loadCandidates({
-  owner, date, territory, nearLat, nearLng, radiusKm = 3,
+  owner, date, territory, source, nearLat, nearLng, radiusKm = 3,
 }) {
   const day = await loadDayMeetings({ owner, date, territory });
   let nearby = { stops: [], count: 0 };
   const lat = nearLat != null ? Number(nearLat) : day.origin?.lat;
   const lng = nearLng != null ? Number(nearLng) : day.origin?.lng;
   if (Number.isFinite(lat) && Number.isFinite(lng)) {
-    // Drop-ins: any lead/account nearby (territory-scoped if set); not limited to this RM
     nearby = await loadNearby({
       lat, lng, radiusKm,
       territory: territory || null,
+      source: source || null,
       owner: null,
       layers: ['leads', 'accounts'],
     });

@@ -3,6 +3,7 @@ import { q } from '../db.js';
 import { cfg } from '../config.js';
 import { TERRITORY_GROUP_KEYS } from '../filters/mapFilters.js';
 import { syncUsers } from '../sync/sync.js';
+import { recordUsage, isClientSku } from '../usage/meter.js';
 
 export const meta = Router();
 
@@ -83,10 +84,18 @@ async function createGoogleTileSession() {
   let data;
   try { data = JSON.parse(text); } catch { data = { error: text }; }
   if (!r.ok) {
+    recordUsage({
+      sku: 'map_tiles_session',
+      provider: 'google',
+      units: 1,
+      ok: false,
+      meta: { status: r.status },
+    });
     const err = new Error(data?.error?.message || data?.error || `Google tiles session failed (${r.status})`);
     err.status = r.status;
     throw err;
   }
+  recordUsage({ sku: 'map_tiles_session', provider: 'google', units: 1, ok: true });
   return data;
 }
 
@@ -143,6 +152,12 @@ meta.get('/maps/viewport', async (req, res) => {
     u.searchParams.set('west', String(west));
     const r = await fetch(u);
     const data = await r.json().catch(() => ({}));
+    recordUsage({
+      sku: 'map_tiles_viewport',
+      provider: 'google',
+      units: 1,
+      ok: r.ok,
+    });
     if (!r.ok) {
       return res.status(r.status).json({ error: data?.error?.message || data?.error || 'viewport failed' });
     }
@@ -217,6 +232,16 @@ meta.get('/filters', async (_req, res) => {
     console.error('[meta/filters]', e);
     res.status(500).json({ error: e.message || 'filters failed' });
   }
+});
+
+meta.post('/usage', (req, res) => {
+  const sku = String(req.body?.sku || '').trim();
+  if (!isClientSku(sku)) {
+    return res.status(400).json({ error: 'sku not allowed' });
+  }
+  const units = Math.max(1, Math.min(20, Number(req.body?.units) || 1));
+  recordUsage({ sku, provider: 'google', units, ok: true });
+  res.json({ ok: true });
 });
 
 meta.get('/unplottable', async (_req, res) => {

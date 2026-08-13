@@ -59,14 +59,14 @@ export async function fetchAuthStatus() {
   return r.json();
 }
 
-export async function login(password) {
+export async function login({ email = '', password = '' } = {}) {
   const r = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password: password || '' }),
+    body: JSON.stringify({ email, password }),
   });
   if (!r.ok) {
-    let msg = 'invalid password';
+    let msg = 'invalid email or password';
     try { const b = await r.json(); msg = b.error || msg; } catch { /* */ }
     throw new Error(msg);
   }
@@ -82,6 +82,19 @@ export function logout() {
 export async function fetchMe() {
   return jfetch('/api/auth/me');
 }
+export const changePassword = (body) =>
+  jfetch('/api/auth/password', {
+    method: 'POST', body: JSON.stringify(body),
+  });
+export const fetchAdminUsers = () => jfetch('/api/admin/users');
+export const createAdminUser = (body) =>
+  jfetch('/api/admin/users', {
+    method: 'POST', body: JSON.stringify(body),
+  });
+export const updateAdminUser = (id, body) =>
+  jfetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+    method: 'PATCH', body: JSON.stringify(body),
+  });
 
 const LAYER_FILTER_KEYS = new Set([
   'owner', 'territory', 'status', 'precision', 'from', 'to', 'joint', 'limit',
@@ -133,6 +146,15 @@ export const exportDiscrepanciesCsv = (params) =>
   jfetch(`/api/discrepancies/export.csv?${qs(params)}`);
 
 export const fetchAdminDashboard = () => jfetch('/api/admin/dashboard');
+export const fetchAdminUsage = () => jfetch('/api/admin/usage');
+export const saveAdminUsageRates = (body) =>
+  jfetch('/api/admin/usage/rates', {
+    method: 'POST', body: JSON.stringify(body),
+  });
+export const reportClientUsage = (sku, units = 1) =>
+  jfetch('/api/meta/usage', {
+    method: 'POST', body: JSON.stringify({ sku, units }),
+  }).catch(() => null);
 export const fetchAdminJob = () => jfetch('/api/admin/job');
 export const fetchZohoStatus = () => jfetch('/api/admin/zoho/status');
 export const refreshZohoToken = () =>

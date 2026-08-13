@@ -1,9 +1,6 @@
 import RoutePlanView from './RoutePlanView';
 
 export default function RoutesPanel({ options = {} }) {
-  const owners = options.owners || [];
-  const territories = options.territories || [];
-
   return (
     <div className="page-panel activity-panel routes-panel">
       <div className="page-head">
@@ -16,7 +13,7 @@ export default function RoutesPanel({ options = {} }) {
         </div>
       </div>
 
-      <RoutePlanView owners={owners} territories={territories} />
+      <RoutePlanView options={options} />
 
       <p className="activity-footnote muted">
         Plans use locatable stops only (exact / geocoded / approx). Pincode and territory

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchActivityCompare } from '../lib/api';
+import PeopleFilters from './PeopleFilters';
 
 function fmtKm(v) {
   if (v == null || Number.isNaN(Number(v))) return '—';
@@ -35,11 +36,15 @@ const OPEN_REASON = {
   most_late: 'most late day',
 };
 
-export default function RmCompareView({ territories = [], onOpenWalk }) {
+export default function RmCompareView({ options = {}, onOpenWalk }) {
   const range0 = useMemo(() => defaultRange(), []);
   const [from, setFrom] = useState(range0.from);
   const [to, setTo] = useState(range0.to);
-  const [territory, setTerritory] = useState('');
+  const [territory, setTerritory] = useState([]);
+  const [userStatus, setUserStatus] = useState([]);
+  const [role, setRole] = useState([]);
+  const [owner, setOwner] = useState([]);
+  const [ownerQ, setOwnerQ] = useState('');
   const [sort, setSort] = useState('path_km');
   const [owners, setOwners] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -69,7 +74,10 @@ export default function RmCompareView({ territories = [], onOpenWalk }) {
         from,
         to,
         sort,
-        territory: territory || undefined,
+        territory: territory.length ? territory.join(',') : undefined,
+        owner: owner.length ? owner.join(',') : undefined,
+        role: role.length ? role.join(',') : undefined,
+        userStatus: userStatus.length ? userStatus.join(',') : undefined,
       });
       setOwners(data.owners || []);
       setMeta({ total: data.total_owners, from: data.from, to: data.to, sort: data.sort });
@@ -79,7 +87,7 @@ export default function RmCompareView({ territories = [], onOpenWalk }) {
     } finally {
       setLoading(false);
     }
-  }, [from, to, sort, territory, rangeDays]);
+  }, [from, to, sort, territory, owner, role, userStatus, rangeDays]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -102,20 +110,6 @@ export default function RmCompareView({ territories = [], onOpenWalk }) {
           <input id="cmp-to" className="input" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
         <div className="activity-field">
-          <label htmlFor="cmp-terr">Territory</label>
-          <select
-            id="cmp-terr"
-            className="input"
-            value={territory}
-            onChange={(e) => setTerritory(e.target.value)}
-          >
-            <option value="">All territories</option>
-            {territories.map((t) => (
-              <option key={t} value={t}>{t}</option>
-            ))}
-          </select>
-        </div>
-        <div className="activity-field">
           <label htmlFor="cmp-sort">Sort by</label>
           <select
             id="cmp-sort"
@@ -129,6 +123,20 @@ export default function RmCompareView({ territories = [], onOpenWalk }) {
           </select>
         </div>
       </div>
+      <PeopleFilters
+        options={options}
+        userStatus={userStatus}
+        onUserStatus={setUserStatus}
+        role={role}
+        onRole={setRole}
+        owner={owner}
+        onOwner={setOwner}
+        ownerQ={ownerQ}
+        onOwnerQ={setOwnerQ}
+        ownerMode="multi"
+        territory={territory}
+        onTerritory={setTerritory}
+      />
 
       {error && <p className="banner err">{error}</p>}
       {loading && <p className="muted">Loading comparison…</p>}

@@ -18,6 +18,7 @@ import InsightDock from './components/InsightDock';
 import OpportunityPanel from './components/OpportunityPanel';
 import {
   fetchStats, fetchFilters, fetchAuthStatus, fetchMe, login, logout, getAppToken,
+  changePassword,
 } from './lib/api';
 
 const TABS = [
@@ -63,12 +64,16 @@ export default function App() {
   const [insightData, setInsightData] = useState({ top: [], ghosts: [], summary: null });
   const [oppOpen, setOppOpen] = useState(false);
   const [flyRequest, setFlyRequest] = useState(null);
+  const [me, setMe] = useState(null);
+  const [pwForm, setPwForm] = useState({ current: '', next: '', msg: null, err: null });
 
   const bootstrap = async () => {
     try {
       const status = await fetchAuthStatus();
       if (!status.authRequired) {
-        if (!getAppToken()) await login('');
+        if (!getAppToken()) await login({});
+        const user = await fetchMe();
+        setMe(user);
         setAuthState('ok');
         return;
       }
@@ -76,9 +81,11 @@ export default function App() {
         setAuthState('need');
         return;
       }
-      await fetchMe();
+      const user = await fetchMe();
+      setMe(user);
       setAuthState('ok');
     } catch {
+      setMe(null);
       setAuthState('need');
     }
   };
@@ -130,6 +137,10 @@ export default function App() {
     saveLastFilters(filters);
   }, [filters]);
 
+  useEffect(() => {
+    if (me && !me.admin && tab === 'admin') setTab('map');
+  }, [me, tab]);
+
   const toggle = (k) => setActive((s) => {
     const n = new Set(s);
     n.has(k) ? n.delete(k) : n.add(k);
@@ -156,10 +167,23 @@ export default function App() {
 
   const doLogout = () => {
     logout();
+    setMe(null);
     setAuthState('need');
   };
 
+  const savePassword = async (e) => {
+    e.preventDefault();
+    setPwForm((p) => ({ ...p, msg: null, err: null }));
+    try {
+      await changePassword({ current: pwForm.current, next: pwForm.next });
+      setPwForm({ current: '', next: '', msg: 'Password updated', err: null });
+    } catch (err) {
+      setPwForm((p) => ({ ...p, err: err.message, msg: null }));
+    }
+  };
+
   const activeFilters = activeFilterEntries(filters);
+  const visibleTabs = TABS.filter((t) => t.id !== 'admin' || me?.admin);
 
   if (shareToken || authState === 'share') {
     return (
@@ -178,7 +202,14 @@ export default function App() {
   }
 
   if (authState === 'need') {
-    return <LoginScreen onSuccess={() => setAuthState('ok')} />;
+    return (
+      <LoginScreen
+        onSuccess={(user) => {
+          setMe(user);
+          setAuthState('ok');
+        }}
+      />
+    );
   }
 
   return (
@@ -189,7 +220,7 @@ export default function App() {
           <small>maps</small>
         </div>
         <nav className="app-tabs" aria-label="Views">
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -204,6 +235,43 @@ export default function App() {
             </button>
           ))}
         </nav>
+        {me?.email && (
+          <details className="account-menu">
+            <summary className="account-summary" title={me.email}>
+              {me.name || me.email}
+            </summary>
+            <div className="account-menu-body">
+              <div className="account-email">{me.email}</div>
+              <div className="account-role">{me.admin ? 'Admin' : 'User'}</div>
+              <form onSubmit={savePassword}>
+                <label className="login-label" htmlFor="cur-pw">Current password</label>
+                <input
+                  id="cur-pw"
+                  className="input"
+                  type="password"
+                  autoComplete="current-password"
+                  value={pwForm.current}
+                  onChange={(e) => setPwForm((p) => ({ ...p, current: e.target.value }))}
+                  required
+                />
+                <label className="login-label" htmlFor="new-pw">New password</label>
+                <input
+                  id="new-pw"
+                  className="input"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={pwForm.next}
+                  onChange={(e) => setPwForm((p) => ({ ...p, next: e.target.value }))}
+                  required
+                />
+                {pwForm.err && <div className="banner err">{pwForm.err}</div>}
+                {pwForm.msg && <div className="banner ok">{pwForm.msg}</div>}
+                <button type="submit" className="btn sm">Update password</button>
+              </form>
+            </div>
+          </details>
+        )}
         <button type="button" className="btn ghost sm logout-btn" onClick={doLogout}>
           Log out
         </button>
@@ -217,6 +285,8 @@ export default function App() {
           activeFilters.length > 0 ? 'has-filter-chips' : '',
           panelOpen ? 'filters-open' : '',
           insightMode !== 'off' ? 'has-insights' : '',
+          selected ? 'has-selected' : '',
+          oppOpen && insightMode !== 'off' ? 'has-opp' : '',
         ].filter(Boolean).join(' ')}
         aria-hidden={tab !== 'map'}
       >
@@ -284,7 +354,10 @@ export default function App() {
         <MapView
           active={active}
           filters={filters}
-          onSelect={setSelected}
+          onSelect={(p) => {
+            setSelected(p);
+            if (p) setOppOpen(false);
+          }}
           onLoading={setLoading}
           focusRequest={focusRequest}
           onFocusHandled={() => setFocusRequest(null)}
@@ -331,7 +404,8 @@ export default function App() {
             className="opp-fab"
             onClick={() => setOppOpen(true)}
           >
-            Opportunities
+            <span className="opp-fab-full">Opportunities</span>
+            <span className="opp-fab-short">Zones</span>
             {insightData.top?.length > 0 && <span className="badge">{insightData.top.length}</span>}
           </button>
         )}
@@ -343,7 +417,10 @@ export default function App() {
           ghosts={insightData.ghosts}
           days={insightDays}
           onFly={(z) => setFlyRequest({ ...z, nonce: Date.now() })}
-          onSelect={setSelected}
+          onSelect={(p) => {
+            setSelected(p);
+            if (p) setOppOpen(false);
+          }}
         />
 
         <FilterPanel
@@ -362,8 +439,8 @@ export default function App() {
       {tab === 'routes' && <RoutesPanel options={options} />}
       {tab === 'disc' && <DiscrepanciesPanel onFocusMap={focusFromGap} />}
       {tab === 'gaps' && <GapsPanel onFocusMap={focusFromGap} />}
-      {tab === 'admin' && <AdminPanel />}
-      {tab === 'help' && <HelpGuide onOpenTab={setTab} />}
+      {tab === 'admin' && me?.admin && <AdminPanel me={me} />}
+      {tab === 'help' && <HelpGuide onOpenTab={setTab} isAdmin={Boolean(me?.admin)} />}
     </div>
   );
 }

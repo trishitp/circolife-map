@@ -66,6 +66,50 @@ export function expandUserStatuses(list) {
   return [...out];
 }
 
+/** Territory-group WHERE fragment (7 metros). Mutates params. */
+export function sqlTerritoryGroups(params, territoryQuery) {
+  const territories = parseList(territoryQuery)
+    .map((t) => (TERRITORY_GROUPS[t] ? t : null))
+    .filter(Boolean);
+  if (!territories.length) return '';
+  const patterns = territories.map((k) => TERRITORY_GROUPS[k].pattern);
+  params.push(patterns);
+  return `territory IS NOT NULL AND territory <> '' AND EXISTS (
+     SELECT 1 FROM unnest($${params.length}::text[]) AS pat(p)
+     WHERE territory ~* ('(?:' || pat.p || ')')
+   )`;
+}
+
+/** CRM Users role / active-inactive match on owner_name. Mutates params. */
+export function sqlCrmUsers(params, query) {
+  const roles = parseList(query.role);
+  const userStatuses = expandUserStatuses(parseList(query.userStatus));
+  if (!roles.length && !userStatuses.length) return '';
+  const joinBits = [
+    `lower(trim(u.full_name)) = lower(trim(map_points.owner_name))`,
+    `map_points.owner_name IS NOT NULL`,
+    `trim(map_points.owner_name) <> ''`,
+  ];
+  if (roles.length === 1) {
+    params.push(roles[0]);
+    joinBits.push(`u.role_name = $${params.length}`);
+  } else if (roles.length > 1) {
+    params.push(roles);
+    joinBits.push(`u.role_name = ANY($${params.length}::text[])`);
+  }
+  if (userStatuses.length === 1) {
+    params.push(userStatuses[0]);
+    joinBits.push(`u.status = $${params.length}`);
+  } else if (userStatuses.length > 1) {
+    params.push(userStatuses);
+    joinBits.push(`u.status = ANY($${params.length}::text[])`);
+  }
+  return `EXISTS (
+     SELECT 1 FROM crm_users u
+     WHERE ${joinBits.join(' AND ')}
+   )`;
+}
+
 /**
  * Append map-point filter clauses for multi-select query params.
  * Mutates `params` and returns WHERE fragments (without leading AND).
@@ -85,19 +129,8 @@ export function buildMapFilterClauses(query, params, { layer } = {}) {
   if (owners.length === 1) add(`owner_name = ?`, owners[0]);
   else if (owners.length > 1) addAny(`owner_name = ANY(?::text[])`, owners);
 
-  const territories = parseList(query.territory)
-    .map((t) => TERRITORY_GROUPS[t] ? t : null)
-    .filter(Boolean);
-  if (territories.length) {
-    const patterns = territories.map((k) => TERRITORY_GROUPS[k].pattern);
-    params.push(patterns);
-    wheres.push(
-      `territory IS NOT NULL AND territory <> '' AND EXISTS (
-         SELECT 1 FROM unnest($${params.length}::text[]) AS pat(p)
-         WHERE territory ~* ('(?:' || pat.p || ')')
-       )`,
-    );
-  }
+  const terrSql = sqlTerritoryGroups(params, query.territory);
+  if (terrSql) wheres.push(terrSql);
 
   const statuses = parseList(query.status);
   if (statuses.length === 1) add(`status = ?`, statuses[0]);
@@ -114,35 +147,8 @@ export function buildMapFilterClauses(query, params, { layer } = {}) {
     else addAny(`extra->>'source' = ANY(?::text[])`, sources);
   }
 
-  const roles = parseList(query.role);
-  const userStatuses = expandUserStatuses(parseList(query.userStatus));
-  if (roles.length || userStatuses.length) {
-    const joinBits = [
-      `lower(trim(u.full_name)) = lower(trim(map_points.owner_name))`,
-      `map_points.owner_name IS NOT NULL`,
-      `trim(map_points.owner_name) <> ''`,
-    ];
-    if (roles.length === 1) {
-      params.push(roles[0]);
-      joinBits.push(`u.role_name = $${params.length}`);
-    } else if (roles.length > 1) {
-      params.push(roles);
-      joinBits.push(`u.role_name = ANY($${params.length}::text[])`);
-    }
-    if (userStatuses.length === 1) {
-      params.push(userStatuses[0]);
-      joinBits.push(`u.status = $${params.length}`);
-    } else if (userStatuses.length > 1) {
-      params.push(userStatuses);
-      joinBits.push(`u.status = ANY($${params.length}::text[])`);
-    }
-    wheres.push(
-      `EXISTS (
-         SELECT 1 FROM crm_users u
-         WHERE ${joinBits.join(' AND ')}
-       )`,
-    );
-  }
+  const crmSql = sqlCrmUsers(params, query);
+  if (crmSql) wheres.push(crmSql);
 
   if (query.from) {
     const from = String(query.from);

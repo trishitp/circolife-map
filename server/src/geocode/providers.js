@@ -1,6 +1,7 @@
 // Geocoder providers. Google preferred when key present; Ola as alternate.
 import { cfg } from '../config.js';
 import { inIndia, isCoarseConfidence, normalizePincode } from './address.js';
+import { recordUsage } from '../usage/meter.js';
 
 /**
  * @param {string} query
@@ -73,6 +74,13 @@ async function olamaps(query, opts = {}) {
   // Bias to India
   u.searchParams.set('bounds', '6.0,68.0,38.0,98.0');
   const r = await fetch(u);
+  recordUsage({
+    sku: 'geocoding_ola',
+    provider: 'olamaps',
+    units: 1,
+    ok: r.ok,
+    meta: { status: r.status },
+  });
   if (r.status === 401 || r.status === 403 || r.status === 429) {
     throw new Error(`olamaps ${r.status}`);
   }
@@ -112,6 +120,13 @@ async function google(query, opts = {}) {
   const r = await fetch(u);
   if (!r.ok) throw new Error(`google http ${r.status}`);
   const j = await r.json();
+  recordUsage({
+    sku: 'geocoding',
+    provider: 'google',
+    units: 1,
+    ok: j.status !== 'REQUEST_DENIED' && j.status !== 'OVER_QUERY_LIMIT',
+    meta: { status: j.status },
+  });
   if (j.status === 'REQUEST_DENIED' || j.status === 'OVER_QUERY_LIMIT'
       || j.status === 'UNKNOWN_ERROR') {
     throw new Error(`google ${j.status}: ${j.error_message || ''}`);

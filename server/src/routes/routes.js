@@ -19,11 +19,12 @@ routes.get('/candidates', async (req, res) => {
     if (!owner) return res.status(400).json({ error: 'owner is required' });
     if (!dateOk(date)) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
     const territory = (req.query.territory || '').trim() || null;
+    const source = (req.query.source || '').trim() || null;
     const nearLat = req.query.nearLat != null ? Number(req.query.nearLat) : null;
     const nearLng = req.query.nearLng != null ? Number(req.query.nearLng) : null;
     const radiusKm = req.query.radiusKm != null ? Number(req.query.radiusKm) : 3;
     const data = await loadCandidates({
-      owner, date, territory, nearLat, nearLng, radiusKm,
+      owner, date, territory, source, nearLat, nearLng, radiusKm,
     });
     res.json(data);
   } catch (e) {
@@ -43,7 +44,8 @@ routes.get('/nearby', async (req, res) => {
     const layers = (req.query.layers || 'leads,accounts').split(',').map((s) => s.trim());
     const owner = (req.query.owner || '').trim() || null;
     const territory = (req.query.territory || '').trim() || null;
-    const data = await loadNearby({ lat, lng, radiusKm, layers, owner, territory });
+    const source = (req.query.source || '').trim() || null;
+    const data = await loadNearby({ lat, lng, radiusKm, layers, owner, territory, source });
     res.json(data);
   } catch (e) {
     console.error('[routes/nearby]', e);

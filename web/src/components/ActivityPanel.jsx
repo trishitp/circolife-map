@@ -11,9 +11,6 @@ export default function ActivityPanel({ options = {} }) {
     setMode('walk');
   }, []);
 
-  const owners = options.owners || [];
-  const territories = options.territories || [];
-
   return (
     <div className="page-panel activity-panel">
       <div className="page-head">
@@ -47,11 +44,11 @@ export default function ActivityPanel({ options = {} }) {
       </div>
 
       {mode === 'compare' && (
-        <RmCompareView territories={territories} onOpenWalk={openWalk} />
+        <RmCompareView options={options} onOpenWalk={openWalk} />
       )}
       {mode === 'walk' && (
         <RmWalkView
-          owners={owners}
+          options={options}
           initialOwner={walkSeed.owner}
           initialDate={walkSeed.date}
         />

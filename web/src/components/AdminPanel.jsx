@@ -5,12 +5,14 @@ import {
   bulkOverride, searchPoints, fetchCacheSample, triggerRebuildDiscrepancies,
   fetchZohoStatus, refreshZohoToken, exchangeZohoCode,
 } from '../lib/api';
+import ApiCostPanel from './ApiCostPanel';
+import UsersAdmin from './UsersAdmin';
 
 const LAYER_LABEL = {
   leads: 'Leads', accounts: 'Accounts', meetings: 'Meetings', assets: 'Assets',
 };
 
-export default function AdminPanel() {
+export default function AdminPanel({ me }) {
   const [dash, setDash] = useState(null);
   const [job, setJob] = useState(null);
   const [error, setError] = useState(null);
@@ -82,7 +84,7 @@ export default function AdminPanel() {
       <header className="page-head">
         <div>
           <h1>Admin</h1>
-          <p>Sync, geocode queue, cache, discrepancies rebuild, and manual pins.</p>
+          <p>Sync, geocode queue, cache, discrepancies rebuild, API cost, and manual pins.</p>
         </div>
       </header>
 
@@ -101,6 +103,9 @@ export default function AdminPanel() {
       {job?.status === 'error' && (
         <div className="banner err">Job failed: {job.error}</div>
       )}
+
+      <ApiCostPanel />
+      <UsersAdmin me={me} />
 
       {dash && (
         <>

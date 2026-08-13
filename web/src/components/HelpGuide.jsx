@@ -1,7 +1,7 @@
 /**
  * In-app how-to guide for Circolife Maps.
  */
-export default function HelpGuide({ onOpenTab }) {
+export default function HelpGuide({ onOpenTab, isAdmin = false }) {
   const go = (id) => () => onOpenTab?.(id);
 
   return (
@@ -26,7 +26,7 @@ export default function HelpGuide({ onOpenTab }) {
           <a href="#help-routes">Routes</a>
           <a href="#help-disc">Discrepancies</a>
           <a href="#help-gaps">Gaps</a>
-          <a href="#help-admin">Admin</a>
+          {isAdmin && <a href="#help-admin">Admin</a>}
           <a href="#help-share">Share to RM</a>
         </nav>
       </div>
@@ -114,11 +114,11 @@ export default function HelpGuide({ onOpenTab }) {
         <ol className="help-steps">
           <li>
             <strong>Compare</strong>
-            <span>Pick agents and a date range to compare check-in paths, scheduled vs actual, and joint meetings.</span>
+            <span>Filter by Active/Inactive, CRM role, RM names, and the 7 metro territories, then compare check-in paths in a range of 31 days or less.</span>
           </li>
           <li>
             <strong>Day walk</strong>
-            <span>One agent + one IST day. See ordered check-ins and the path they walked (GPS may share a cell for multiple visits).</span>
+            <span>Pick an RM (narrowed by Active/Inactive and CRM role), a date, and optional metro territory. Delhi includes NCR; Mumbai includes Thane / Navi Mumbai.</span>
           </li>
         </ol>
       </section>
@@ -131,7 +131,7 @@ export default function HelpGuide({ onOpenTab }) {
         <ol className="help-steps">
           <li>
             <strong>Pick RM + date</strong>
-            <span>Load that day’s meetings (and nearby drop-ins).</span>
+            <span>Narrow the RM list by Active/Inactive and CRM role, then load that day’s meetings. Metro territory and lead source apply to meetings and nearby drop-ins (Delhi = NCR, Mumbai = Thane / Navi Mumbai).</span>
           </li>
           <li>
             <strong>Build the plan</strong>
@@ -173,6 +173,7 @@ export default function HelpGuide({ onOpenTab }) {
         </p>
       </section>
 
+      {isAdmin && (
       <section id="help-admin" className="help-section soft-block">
         <div className="help-section-head">
           <h2>Admin</h2>
@@ -182,9 +183,12 @@ export default function HelpGuide({ onOpenTab }) {
           <li><strong>Sync</strong> — pull latest Zoho Analytics data into the map store.</li>
           <li><strong>Re-geocode</strong> — refresh street geocodes after fixes or API key unlocks.</li>
           <li><strong>Rebuild discrepancies</strong> — recalculate multi-source distance checks.</li>
+          <li><strong>API cost</strong> — estimated Google Maps / geocode / Routes spend this month, plus a rate card you can edit.</li>
+          <li><strong>Users</strong> — add teammates, grant admin, disable accounts.</li>
           <li><strong>Overrides</strong> — manually set lat/lng for known correct locations.</li>
         </ol>
       </section>
+      )}
 
       <section id="help-share" className="help-section soft-block">
         <div className="help-section-head">
@@ -193,7 +197,7 @@ export default function HelpGuide({ onOpenTab }) {
         </div>
         <ol className="help-steps">
           <li>After Optimize, tap <strong>Share to RM</strong> — link is copied (and share sheet on mobile).</li>
-          <li>RM opens <code>#/r/…</code> — no app password required for that link.</li>
+          <li>RM opens <code>#/r/…</code> — no app login required for that link.</li>
           <li>Actions: map + stop list, <strong>Start full route</strong> / <strong>Navigate here</strong>, and <strong>Open CRM</strong>.</li>
         </ol>
       </section>
@@ -203,7 +207,8 @@ export default function HelpGuide({ onOpenTab }) {
         <ul className="help-bullets">
           <li>India / IST dates everywhere we show “today” for field work.</li>
           <li>If pins look empty, try widening filters (status/date) or turning another layer on.</li>
-          <li>Session expires after logout or password change — sign in again from Log out.</li>
+          <li>Sign in with your email. Only admins see the Admin tab.</li>
+          <li>Session expires after logout — sign in again from Log out.</li>
           <li>Google Maps open in a new tab for turn-by-turn navigation.</li>
         </ul>
       </section>

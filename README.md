@@ -8,26 +8,36 @@ React + MapLibre frontend (Google Maps roadmap tiles), Node sync/API backend, Po
 
 ## Auth
 
-One app password gates the product (map, activity, routes, gaps, discrepancies, admin).
+Each person signs in with **email + password**. The Admin tab and `/api/admin/*` are limited to admin accounts.
 
 ```bash
 # server/.env
-APP_PASSWORD=your-shared-secret
+APP_PASSWORD=at-least-8-chars          # also used as the first admin's password
+BOOTSTRAP_ADMIN_EMAIL=you@circolife.com
+# Optional: these emails are always admin (cannot be demoted in the UI)
+ADMIN_EMAILS=you@circolife.com
 
 # Production extras:
 # NODE_ENV=production
 # CORS_ORIGINS=https://maps.yourdomain.com
 # DATABASE_SSL=true
 # SESSION_SECRET=long-random-string
-# ADMIN_TOKEN=different-secret   # optional; Admin writes then need X-Admin-Token
+# ADMIN_TOKEN=script-secret   # optional; scripts may send X-Admin-Token instead of a user session
 ```
 
-- `POST /api/auth/login` → session token (Bearer)
-- All other `/api/*` routes require the token when `APP_PASSWORD` is set
+On first boot with an empty `app_accounts` table, either:
+
+1. Set `BOOTSTRAP_ADMIN_EMAIL` — the server creates that admin using `APP_PASSWORD`, or
+2. Sign in once with your work email + the existing `APP_PASSWORD` — that account becomes the first admin.
+
+After that, the shared password is **not** a login. Add teammates under Admin → Users.
+
+- `POST /api/auth/login` `{ email, password }` → session token (Bearer)
+- All other `/api/*` routes require the token when auth is on
+- `/api/admin/*` also requires `admin` on the account
 - Public: `/healthz`, `/api/auth/*`, `/api/routes/share/:token` (RM day-route links)
-- Empty `APP_PASSWORD` = open APIs (**local only**; refused when `NODE_ENV=production`)
+- Empty `APP_PASSWORD` and no accounts = open APIs (**local only**; refused when `NODE_ENV=production`)
 - Login rate limit: ~20 attempts / 15 minutes per IP
-- If `APP_PASSWORD` and a **different** `ADMIN_TOKEN` are both set, Admin mutations require header `X-Admin-Token`
 
 ## Architecture
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchActivityWalk } from '../lib/api';
 import WalkMap from './WalkMap';
+import PeopleFilters from './PeopleFilters';
 
 function fmtTime(iso) {
   if (!iso) return '—';
@@ -52,7 +53,7 @@ function shiftDate(ymd, delta) {
   return `${yy}-${mm}-${dd}`;
 }
 
-export default function RmWalkView({ owners = [], initialOwner, initialDate }) {
+export default function RmWalkView({ options = {}, initialOwner, initialDate }) {
   const today = useMemo(() => {
     try {
       return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
@@ -64,6 +65,9 @@ export default function RmWalkView({ owners = [], initialOwner, initialDate }) {
   const [owner, setOwner] = useState(initialOwner || '');
   const [date, setDate] = useState(initialDate || today);
   const [ownerQ, setOwnerQ] = useState('');
+  const [userStatus, setUserStatus] = useState([]);
+  const [role, setRole] = useState([]);
+  const [territory, setTerritory] = useState([]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -90,7 +94,11 @@ export default function RmWalkView({ owners = [], initialOwner, initialDate }) {
     setData(null);
     setSelectedId(null);
     lastScrollPlace.current = null;
-    fetchActivityWalk({ owner, date })
+    fetchActivityWalk({
+      owner,
+      date,
+      territory: territory.length ? territory.join(',') : undefined,
+    })
       .then((d) => {
         if (!cancelled) {
           setData(d);
@@ -106,19 +114,13 @@ export default function RmWalkView({ owners = [], initialOwner, initialDate }) {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [owner, date]);
+  }, [owner, date, territory]);
 
   useEffect(() => {
     if (!selectedId) return;
     const el = stopRefs.current.get(selectedId);
     el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [selectedId]);
-
-  const filteredOwners = useMemo(() => {
-    const q = ownerQ.trim().toLowerCase();
-    if (!q) return owners.slice(0, 120);
-    return owners.filter((o) => o.toLowerCase().includes(q)).slice(0, 120);
-  }, [owners, ownerQ]);
 
   const meetings = data?.meetings || data?.stops || [];
   const places = data?.places || [];
@@ -147,31 +149,6 @@ export default function RmWalkView({ owners = [], initialOwner, initialDate }) {
   return (
     <div className="activity-walk">
       <div className="toolbar activity-toolbar">
-        <div className="activity-field">
-          <label htmlFor="walk-owner-search">Field agent (RM)</label>
-          <input
-            id="walk-owner-search"
-            className="input"
-            type="search"
-            placeholder="Search agents…"
-            value={ownerQ}
-            onChange={(e) => setOwnerQ(e.target.value)}
-          />
-          <select
-            className="input"
-            value={owner}
-            onChange={(e) => setOwner(e.target.value)}
-            aria-label="Select field agent"
-          >
-            <option value="">Select agent…</option>
-            {owner && !owners.includes(owner) && (
-              <option value={owner}>{owner}</option>
-            )}
-            {filteredOwners.map((o) => (
-              <option key={o} value={o}>{o}</option>
-            ))}
-          </select>
-        </div>
         <div className="activity-field activity-date-field">
           <label htmlFor="walk-date">Date (IST)</label>
           <div className="activity-date-row">
@@ -187,6 +164,20 @@ export default function RmWalkView({ owners = [], initialOwner, initialDate }) {
           </div>
         </div>
       </div>
+      <PeopleFilters
+        options={options}
+        userStatus={userStatus}
+        onUserStatus={setUserStatus}
+        role={role}
+        onRole={setRole}
+        owner={owner}
+        onOwner={setOwner}
+        ownerQ={ownerQ}
+        onOwnerQ={setOwnerQ}
+        ownerMode="single"
+        territory={territory}
+        onTerritory={setTerritory}
+      />
 
       {error && <p className="banner err">{error}</p>}
       {loading && <p className="muted">Loading walk…</p>}
