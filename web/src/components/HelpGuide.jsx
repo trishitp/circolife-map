@@ -184,7 +184,7 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
           <li><strong>Re-geocode</strong> — refresh street geocodes after fixes or API key unlocks.</li>
           <li><strong>Rebuild discrepancies</strong> — recalculate multi-source distance checks.</li>
           <li><strong>API cost</strong> — estimated Google Maps / geocode / Routes spend this month, plus a rate card you can edit.</li>
-          <li><strong>Users</strong> — add teammates, grant admin, disable accounts.</li>
+          <li><strong>Users</strong> — grant admin after people sign in with Zoho; disable accounts.</li>
           <li><strong>Overrides</strong> — manually set lat/lng for known correct locations.</li>
         </ol>
       </section>
@@ -207,7 +207,7 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
         <ul className="help-bullets">
           <li>India / IST dates everywhere we show “today” for field work.</li>
           <li>If pins look empty, try widening filters (status/date) or turning another layer on.</li>
-          <li>Sign in with your email. Only admins see the Admin tab.</li>
+          <li>Sign in with Zoho. Only admins see the Admin tab.</li>
           <li>Session expires after logout — sign in again from Log out.</li>
           <li>Google Maps open in a new tab for turn-by-turn navigation.</li>
         </ul>

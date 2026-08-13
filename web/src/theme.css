@@ -1866,6 +1866,13 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   color: var(--ink-soft);
 }
 .login-btn { width: 100%; margin-top: 6px; min-height: 44px; }
+a.login-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-sizing: border-box;
+}
 .login-card .input { min-width: 0; width: 100%; font-size: 16px; }
 
 .account-menu {

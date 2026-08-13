@@ -8,35 +8,32 @@ React + MapLibre frontend (Google Maps roadmap tiles), Node sync/API backend, Po
 
 ## Auth
 
-Each person signs in with **email + password**. The Admin tab and `/api/admin/*` are limited to admin accounts.
+Sign in with **Zoho** (Circolife Zoho account). The Admin tab and `/api/admin/*` are limited to admin accounts.
 
 ```bash
 # server/.env
-APP_PASSWORD=at-least-8-chars          # also used as the first admin's password
-BOOTSTRAP_ADMIN_EMAIL=you@circolife.com
-# Optional: these emails are always admin (cannot be demoted in the UI)
+ZOHO_CLIENT_ID=...
+ZOHO_CLIENT_SECRET=...
+ZOHO_LOGIN_REDIRECT_URI=https://maps.circolife.org/api/auth/zoho/callback
+# Optional: these emails are always admin
 ADMIN_EMAILS=you@circolife.com
-
-# Production extras:
-# NODE_ENV=production
-# CORS_ORIGINS=https://maps.yourdomain.com
-# DATABASE_SSL=true
-# SESSION_SECRET=long-random-string
-# ADMIN_TOKEN=script-secret   # optional; scripts may send X-Admin-Token instead of a user session
+APP_PASSWORD=...          # HMAC / production gate only — not a user login
+SESSION_SECRET=...
 ```
 
-On first boot with an empty `app_accounts` table, either:
+In [Zoho API Console](https://api-console.zoho.in/) create a **Server-based** client (not Self Client — that one is for Analytics sync). Add Authorized Redirect URI:
 
-1. Set `BOOTSTRAP_ADMIN_EMAIL` — the server creates that admin using `APP_PASSWORD`, or
-2. Sign in once with your work email + the existing `APP_PASSWORD` — that account becomes the first admin.
+`https://maps.circolife.org/api/auth/zoho/callback`
 
-After that, the shared password is **not** a login. Add teammates under Admin → Users.
+Reuse `ZOHO_CLIENT_ID` / `ZOHO_CLIENT_SECRET` only if that client is already Server-based. Otherwise set `ZOHO_LOGIN_CLIENT_ID` / `ZOHO_LOGIN_CLIENT_SECRET` to the new client and leave Analytics credentials unchanged.
 
-- `POST /api/auth/login` `{ email, password }` → session token (Bearer)
-- All other `/api/*` routes require the token when auth is on
-- `/api/admin/*` also requires `admin` on the account
+Zoho login stays off until `ZOHO_LOGIN_REDIRECT_URI` is set (email/password still works until then).
+
+First Zoho sign-in becomes admin if no admin exists yet. CRM roles matching Admin / CEO / Founder / Director are also granted admin. Everyone else gets the map without the Admin tab.
+
+- `GET /api/auth/zoho/start` → Zoho consent → callback → session
+- `/api/admin/*` requires `admin` on the account
 - Public: `/healthz`, `/api/auth/*`, `/api/routes/share/:token` (RM day-route links)
-- Empty `APP_PASSWORD` and no accounts = open APIs (**local only**; refused when `NODE_ENV=production`)
 - Login rate limit: ~20 attempts / 15 minutes per IP
 
 ## Architecture
@@ -90,7 +87,7 @@ cd ../web && npm i && npm run dev
 and street geocoding misses. Without it, the pipeline falls through to territory
 centroids only.
 
-Open http://localhost:4040 — sign in with `APP_PASSWORD`. Use **Admin → Clear failed + re-geocode** after first sync, then **Rebuild discrepancies** (or full sync, which rebuilds automatically).
+Open http://localhost:4040 — sign in with Zoho (set `ZOHO_LOGIN_REDIRECT_URI`). Use **Admin → Clear failed + re-geocode** after first sync, then **Rebuild discrepancies** (or full sync, which rebuilds automatically).
 
 Optional: `npm run regeocode` in `server/`.
 
@@ -145,7 +142,9 @@ APP_PASSWORD=...
 SESSION_SECRET=...
 GOOGLE_MAPS_API_KEY=...
 # Zoho credentials…
-# CORS_ORIGINS=https://maps.yourdomain.com   # if the browser uses a public origin
+# CORS_ORIGINS=https://maps.circolife.org
+# ZOHO_LOGIN_REDIRECT_URI=https://maps.circolife.org/api/auth/zoho/callback
+# ADMIN_EMAILS=you@circolife.com
 ```
 
 Hostname `circolife-ai-postgres` resolves only when the app shares that container’s Docker network (`POSTGRES_DOCKER_NETWORK`).
@@ -159,7 +158,7 @@ curl -s http://127.0.0.1:4040/healthz
 docker compose exec app npm run sync   # first Zoho load — can take a while
 ```
 
-Open `http://<server>:4040` and sign in with `APP_PASSWORD`. Entrypoint runs migrate + pincode seed automatically.
+Open `https://maps.circolife.org` and sign in with Zoho. Entrypoint runs migrate + pincode seed automatically.
 
 - Health: `GET /healthz` → `{ ok: true }` (DB ping)
 - Cron: `docker compose exec app npm run sync` daily (or Admin → Sync)

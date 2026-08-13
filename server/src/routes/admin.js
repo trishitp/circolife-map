@@ -11,6 +11,7 @@ import { usageSummary, saveRates } from '../usage/meter.js';
 import {
   listAccounts, createAccount, updateAccount,
 } from '../accounts.js';
+import { zohoLoginEnabled } from '../zoho/login.js';
 
 export const admin = Router();
 // Auth is enforced app-wide by requireAuth; writes may also need ADMIN_TOKEN.
@@ -310,6 +311,9 @@ admin.get('/users', async (_req, res) => {
 
 admin.post('/users', async (req, res) => {
   try {
+    if (zohoLoginEnabled()) {
+      return res.status(400).json({ error: 'users sign in with Zoho — password accounts are disabled' });
+    }
     const user = await createAccount({
       email: req.body?.email,
       name: req.body?.name,

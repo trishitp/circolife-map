@@ -39,6 +39,11 @@ export const cfg = {
     orgId: process.env.ZOHO_ORG_ID || '60041938002',
     workspaceId: process.env.ZOHO_WORKSPACE_ID || '441267000002068095',
     fsmWorkspaceId: process.env.ZOHO_FSM_WORKSPACE_ID || '441267000003723011',
+    redirectUri: optional('ZOHO_REDIRECT_URI'),
+    /** Server-based OAuth client for Maps sign-in (falls back to ZOHO_CLIENT_*). */
+    loginClientId: optional('ZOHO_LOGIN_CLIENT_ID'),
+    loginClientSecret: optional('ZOHO_LOGIN_CLIENT_SECRET'),
+    loginRedirectUri: process.env.ZOHO_LOGIN_REDIRECT_URI || '',
   },
   geocoder: process.env.GEOCODER || 'google',
   olaKey: process.env.OLAMAPS_API_KEY,

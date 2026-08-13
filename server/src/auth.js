@@ -11,7 +11,16 @@ import {
   isValidEmail,
   publicAccount,
   updateAccount,
+  upsertZohoAccount,
 } from './accounts.js';
+import {
+  zohoLoginEnabled,
+  zohoAuthorizeUrl,
+  loginRedirectUri,
+  readOauthState,
+  exchangeLoginCode,
+  fetchZohoProfile,
+} from './zoho/login.js';
 
 const SESSION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 /** Simple in-memory login rate limit (per IP). */
@@ -101,9 +110,10 @@ function envAdminTokenOk(req) {
   return Boolean(hdr) && hdr === envAdmin;
 }
 
-/** True when logins are required (production / APP_PASSWORD / existing accounts). */
+/** True when logins are required (production / APP_PASSWORD / Zoho / existing accounts). */
 export async function authRequired() {
   if (cfg.appPassword) return true;
+  if (zohoLoginEnabled()) return true;
   return hasAccounts();
 }
 
@@ -205,12 +215,69 @@ function mePayload(user, required) {
 
 export const auth = Router();
 
+function frontendOrigin(req) {
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https')
+    .split(',')[0].trim();
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '')
+    .split(',')[0].trim();
+  return host ? `${proto}://${host}` : '';
+}
+
 auth.get('/status', async (_req, res) => {
   const required = await authRequired();
   res.json({
     authRequired: required,
+    zohoLogin: zohoLoginEnabled(),
     accounts: await countAccounts().catch(() => 0),
   });
+});
+
+auth.get('/zoho/start', (req, res) => {
+  try {
+    rateLimitLogin(req);
+  } catch (e) {
+    return res.status(e.status || 429).json({ error: e.message });
+  }
+  if (!zohoLoginEnabled()) {
+    return res.status(503).json({
+      error: 'Zoho login is not configured — set ZOHO_CLIENT_ID and ZOHO_CLIENT_SECRET',
+    });
+  }
+  try {
+    const { url } = zohoAuthorizeUrl(req);
+    res.redirect(302, url);
+  } catch (e) {
+    res.status(500).json({ error: e.message || 'Zoho login failed' });
+  }
+});
+
+auth.get('/zoho/callback', async (req, res) => {
+  const origin = frontendOrigin(req) || '/';
+  const fail = (msg) => {
+    const u = new URL('/', origin.endsWith('/') ? origin : `${origin}/`);
+    u.searchParams.set('auth_error', msg);
+    res.redirect(302, u.toString());
+  };
+  try {
+    if (req.query.error) {
+      return fail(String(req.query.error_description || req.query.error));
+    }
+    const code = String(req.query.code || '').trim();
+    const state = String(req.query.state || '').trim();
+    if (!code) return fail('missing Zoho authorization code');
+    if (!readOauthState(state)) return fail('Zoho sign-in expired — try again');
+    const redirectUri = loginRedirectUri(req);
+    const access = await exchangeLoginCode(code, redirectUri);
+    const profile = await fetchZohoProfile(access);
+    const user = await upsertZohoAccount(profile);
+    const token = createSessionToken(user);
+    const u = new URL('/', origin.endsWith('/') ? origin : `${origin}/`);
+    u.searchParams.set('auth_token', token);
+    res.redirect(302, u.toString());
+  } catch (e) {
+    console.error('[auth/zoho/callback]', e);
+    fail(e.message || 'Zoho sign-in failed');
+  }
 });
 
 auth.post('/login', async (req, res) => {
@@ -228,6 +295,9 @@ auth.post('/login', async (req, res) => {
         authRequired: false,
         user: mePayload(user, false),
       });
+    }
+    if (zohoLoginEnabled()) {
+      return res.status(400).json({ error: 'sign in with Zoho' });
     }
     const email = req.body?.email;
     const password = req.body?.password;

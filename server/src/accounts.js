@@ -67,6 +67,7 @@ export function publicAccount(row) {
     active: row.active !== false,
     lastLoginAt: row.last_login_at || null,
     createdAt: row.created_at || null,
+    loginProvider: row.login_provider || 'password',
   };
 }
 
@@ -103,7 +104,8 @@ export async function getAccountByEmail(email) {
 
 export async function listAccounts() {
   const r = await q(`
-    SELECT id, email, name, is_admin, active, last_login_at, created_at, updated_at
+    SELECT id, email, name, is_admin, active, last_login_at, created_at, updated_at,
+           login_provider, zoho_zuid
     FROM app_accounts
     ORDER BY is_admin DESC, lower(email)
   `);
@@ -218,28 +220,98 @@ export async function touchLogin(id) {
 
 export async function authenticate(email, password) {
   const row = await getAccountByEmail(email);
-  if (!row || row.active === false) return null;
+  if (!row || row.active === false || !row.password_hash) return null;
   const ok = await verifyPassword(password, row.password_hash);
   if (!ok) return null;
   await touchLogin(row.id);
   return publicAccount(row);
 }
 
+const CRM_ADMIN_ROLE = /admin|ceo|founder|director|super\s*admin/i;
+
+export async function upsertZohoAccount({ email, name, zuid } = {}) {
+  const e = normalizeEmail(email);
+  if (!isValidEmail(e)) {
+    const err = new Error('Zoho account has no usable email');
+    err.status = 400;
+    throw err;
+  }
+  const crm = await q(
+    `SELECT full_name, role_name, status FROM crm_users WHERE lower(email) = $1 LIMIT 1`,
+    [e],
+  ).catch(() => ({ rows: [] }));
+  const crmRow = crm.rows[0];
+  if (process.env.ZOHO_LOGIN_REQUIRE_CRM === '1' && !crmRow) {
+    const err = new Error('this Zoho user is not in Circolife CRM Users');
+    err.status = 403;
+    throw err;
+  }
+  if (crmRow && String(crmRow.status || '').toLowerCase() === 'disabled') {
+    const err = new Error('this CRM user is disabled');
+    err.status = 403;
+    throw err;
+  }
+
+  const display = String(name || crmRow?.full_name || '').trim() || e.split('@')[0];
+  const crmAdmin = CRM_ADMIN_ROLE.test(crmRow?.role_name || '');
+  const existing = await getAccountByEmail(e);
+  if (existing) {
+    if (existing.active === false) {
+      const err = new Error('this Maps account is disabled');
+      err.status = 403;
+      throw err;
+    }
+    const promote = isEnvAdmin(e) || crmAdmin;
+    const r = await q(
+      `UPDATE app_accounts
+       SET name = $2,
+           zoho_zuid = COALESCE(NULLIF($3, ''), zoho_zuid),
+           login_provider = 'zoho',
+           is_admin = CASE WHEN $4 THEN TRUE ELSE is_admin END,
+           last_login_at = now(),
+           updated_at = now()
+       WHERE id = $1
+       RETURNING *`,
+      [existing.id, display, zuid || '', promote],
+    );
+    return publicAccount(r.rows[0]);
+  }
+
+  const admins = await q(
+    `SELECT COUNT(*)::int AS n FROM app_accounts WHERE is_admin = TRUE AND active = TRUE`,
+  );
+  const isAdmin = isEnvAdmin(e) || crmAdmin || !(admins.rows[0]?.n);
+  const id = newId();
+  const r = await q(
+    `INSERT INTO app_accounts
+       (id, email, name, password_hash, is_admin, active, login_provider, zoho_zuid, last_login_at)
+     VALUES ($1, $2, $3, NULL, $4, TRUE, 'zoho', $5, now())
+     RETURNING *`,
+    [id, e, display, isAdmin, zuid || null],
+  );
+  invalidateAccountCache();
+  return publicAccount(r.rows[0]);
+}
+
 /**
- * If the accounts table is empty, create the first admin from env so existing
- * deployments keep working after switching off the shared APP_PASSWORD login.
+ * Password bootstrap is skipped when Zoho login is configured — the first
+ * Zoho sign-in becomes admin if no admin exists yet.
  */
 export async function ensureBootstrapAdmin() {
   try {
     const n = await countAccounts();
     if (n > 0) return { created: false, count: n };
+    if (cfg.zoho.loginRedirectUri && (cfg.zoho.loginClientId || cfg.zoho.clientId)) {
+      console.log('[auth] Zoho login on — first Zoho sign-in becomes admin');
+      return { created: false, count: 0, zoho: true };
+    }
     const email = normalizeEmail(cfg.bootstrapAdminEmail)
       || parseEmailList(cfg.adminEmails)[0]
       || '';
     const password = cfg.bootstrapAdminPassword || cfg.appPassword || '';
     if (!email || !password) {
       console.warn(
-        '[auth] no app_accounts yet — set BOOTSTRAP_ADMIN_EMAIL and APP_PASSWORD (or BOOTSTRAP_ADMIN_PASSWORD) to create the first admin',
+        '[auth] no app_accounts yet — sign in with Zoho, or set BOOTSTRAP_ADMIN_EMAIL',
       );
       return { created: false, count: 0 };
     }

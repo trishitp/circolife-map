@@ -18,7 +18,7 @@ import InsightDock from './components/InsightDock';
 import OpportunityPanel from './components/OpportunityPanel';
 import {
   fetchStats, fetchFilters, fetchAuthStatus, fetchMe, login, logout, getAppToken,
-  changePassword,
+  setAppToken,
 } from './lib/api';
 
 const TABS = [
@@ -31,7 +31,21 @@ const TABS = [
   { id: 'help', label: 'How to use' },
 ];
 
-/** Shared RM link: #/r/<token> or #r/<token> */
+function takeAuthFromUrl() {
+  if (typeof window === 'undefined') return { token: null, error: null };
+  const q = new URLSearchParams(window.location.search);
+  const token = q.get('auth_token');
+  const error = q.get('auth_error');
+  if (token || error) {
+    q.delete('auth_token');
+    q.delete('auth_error');
+    const search = q.toString();
+    const next = `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`;
+    window.history.replaceState({}, '', next);
+  }
+  return { token, error };
+}
+
 function parseShareToken() {
   if (typeof window === 'undefined') return null;
   const hash = (window.location.hash || '').replace(/^#/, '');
@@ -65,10 +79,13 @@ export default function App() {
   const [oppOpen, setOppOpen] = useState(false);
   const [flyRequest, setFlyRequest] = useState(null);
   const [me, setMe] = useState(null);
-  const [pwForm, setPwForm] = useState({ current: '', next: '', msg: null, err: null });
+  const [loginError, setLoginError] = useState(null);
 
   const bootstrap = async () => {
     try {
+      const fromUrl = takeAuthFromUrl();
+      if (fromUrl.error) setLoginError(fromUrl.error);
+      if (fromUrl.token) setAppToken(fromUrl.token);
       const status = await fetchAuthStatus();
       if (!status.authRequired) {
         if (!getAppToken()) await login({});
@@ -171,17 +188,6 @@ export default function App() {
     setAuthState('need');
   };
 
-  const savePassword = async (e) => {
-    e.preventDefault();
-    setPwForm((p) => ({ ...p, msg: null, err: null }));
-    try {
-      await changePassword({ current: pwForm.current, next: pwForm.next });
-      setPwForm({ current: '', next: '', msg: 'Password updated', err: null });
-    } catch (err) {
-      setPwForm((p) => ({ ...p, err: err.message, msg: null }));
-    }
-  };
-
   const activeFilters = activeFilterEntries(filters);
   const visibleTabs = TABS.filter((t) => t.id !== 'admin' || me?.admin);
 
@@ -204,6 +210,7 @@ export default function App() {
   if (authState === 'need') {
     return (
       <LoginScreen
+        error={loginError}
         onSuccess={(user) => {
           setMe(user);
           setAuthState('ok');
@@ -243,32 +250,7 @@ export default function App() {
             <div className="account-menu-body">
               <div className="account-email">{me.email}</div>
               <div className="account-role">{me.admin ? 'Admin' : 'User'}</div>
-              <form onSubmit={savePassword}>
-                <label className="login-label" htmlFor="cur-pw">Current password</label>
-                <input
-                  id="cur-pw"
-                  className="input"
-                  type="password"
-                  autoComplete="current-password"
-                  value={pwForm.current}
-                  onChange={(e) => setPwForm((p) => ({ ...p, current: e.target.value }))}
-                  required
-                />
-                <label className="login-label" htmlFor="new-pw">New password</label>
-                <input
-                  id="new-pw"
-                  className="input"
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  value={pwForm.next}
-                  onChange={(e) => setPwForm((p) => ({ ...p, next: e.target.value }))}
-                  required
-                />
-                {pwForm.err && <div className="banner err">{pwForm.err}</div>}
-                {pwForm.msg && <div className="banner ok">{pwForm.msg}</div>}
-                <button type="submit" className="btn sm">Update password</button>
-              </form>
+              <p className="muted" style={{ margin: 0, fontSize: 12 }}>Signed in with Zoho</p>
             </div>
           </details>
         )}

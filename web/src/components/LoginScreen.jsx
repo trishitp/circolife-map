@@ -1,19 +1,26 @@
-import { useState } from 'react';
-import { login } from '../lib/api';
+import { useEffect, useState } from 'react';
+import { fetchAuthStatus, login } from '../lib/api';
 
-export default function LoginScreen({ onSuccess }) {
+export default function LoginScreen({ error: initialError, onSuccess }) {
+  const [error, setError] = useState(initialError || null);
+  const [zoho, setZoho] = useState(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const submit = async (e) => {
+  useEffect(() => {
+    fetchAuthStatus()
+      .then((s) => setZoho(Boolean(s.zohoLogin)))
+      .catch((e) => setError(e.message));
+  }, []);
+
+  const submitPassword = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
       const data = await login({ email, password });
-      onSuccess(data.user || null);
+      onSuccess?.(data.user || null);
     } catch (err) {
       setError(err.message || 'Login failed');
     } finally {
@@ -23,47 +30,52 @@ export default function LoginScreen({ onSuccess }) {
 
   return (
     <div className="login-screen">
-      <form className="login-card" onSubmit={submit}>
+      <div className="login-card">
         <div className="login-brand">
           circo<span>life</span>
           <small>maps</small>
         </div>
         <h1>Sign in</h1>
         <p className="login-copy">
-          Use your Circolife Maps email and password. Admin tools are only shown
-          to admin accounts. If this is the first sign-in, use your work email
-          and the current app password — you become the first admin.
+          {zoho
+            ? 'Use your Circolife Zoho account. Admin tools are only shown to admins.'
+            : 'Use the email and password from Admin → Users.'}
         </p>
-        <label className="login-label" htmlFor="app-email">Email</label>
-        <input
-          id="app-email"
-          className="input"
-          type="email"
-          autoComplete="username"
-          inputMode="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@circolife.com"
-          disabled={loading}
-          required
-        />
-        <label className="login-label" htmlFor="app-password">Password</label>
-        <input
-          id="app-password"
-          className="input"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Password"
-          disabled={loading}
-          required
-        />
         {error && <div className="banner err">{error}</div>}
-        <button type="submit" className="btn login-btn" disabled={loading}>
-          {loading ? 'Signing in…' : 'Enter Circolife Maps'}
-        </button>
-      </form>
+        {zoho ? (
+          <a className="btn login-btn" href="/api/auth/zoho/start">
+            Sign in with Zoho
+          </a>
+        ) : zoho === false ? (
+          <form onSubmit={submitPassword}>
+            <label className="login-label">
+              Email
+              <input
+                className="input"
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </label>
+            <label className="login-label">
+              Password
+              <input
+                className="input"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </label>
+            <button className="btn login-btn" type="submit" disabled={loading}>
+              {loading ? 'Signing in…' : 'Sign in'}
+            </button>
+          </form>
+        ) : null}
+      </div>
     </div>
   );
 }
