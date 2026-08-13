@@ -14,8 +14,10 @@ import RoutesPanel from './components/RoutesPanel';
 import SharedRouteView from './components/SharedRouteView';
 import HelpGuide from './components/HelpGuide';
 import LoginScreen from './components/LoginScreen';
-import InsightDock from './components/InsightDock';
+import InsightDock, { INSIGHT_MODES } from './components/InsightDock';
 import OpportunityPanel from './components/OpportunityPanel';
+import MobileNav from './components/MobileNav';
+import { IconInsights, IconLegend, IconZones } from './components/icons';
 import {
   fetchStats, fetchFilters, fetchAuthStatus, fetchMe, login, logout, getAppToken,
   setAppToken,
@@ -86,11 +88,13 @@ export default function App() {
   const [insightData, setInsightData] = useState({ top: [], ghosts: [], summary: null });
   const [oppOpen, setOppOpen] = useState(false);
   const [legendOpen, setLegendOpen] = useState(() => (
-    typeof window !== 'undefined' ? window.matchMedia('(min-width: 721px)').matches : true
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 901px)').matches : true
   ));
   const [flyRequest, setFlyRequest] = useState(null);
   const [me, setMe] = useState(null);
   const [loginError, setLoginError] = useState(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [mapMenu, setMapMenu] = useState(null);
 
   const bootstrap = async () => {
     try {
@@ -179,9 +183,28 @@ export default function App() {
     if (next) {
       setSelected(null);
       setOppOpen(false);
+      setMapMenu(null);
+      setMoreOpen(false);
     }
     setPanelOpen(next);
   };
+
+  const setTabAndClose = (id) => {
+    setPanelOpen(false);
+    setMoreOpen(false);
+    setMapMenu(null);
+    setTab(id);
+  };
+
+  const pickInsight = (m) => {
+    setInsightMode(m);
+    if (m === 'off') setOppOpen(false);
+    else if (typeof window !== 'undefined' && window.matchMedia('(min-width: 901px)').matches) {
+      setOppOpen(true);
+    }
+  };
+
+  const insightLabel = INSIGHT_MODES.find((m) => m.id === insightMode)?.short || 'Insights';
 
   const focusFromGap = ({ layer, sourceId }) => {
     setTab('map');
@@ -201,6 +224,7 @@ export default function App() {
 
   const activeFilters = activeFilterEntries(filters);
   const visibleTabs = TABS.filter((t) => t.id !== 'admin' || me?.admin);
+  const moreTabs = visibleTabs.filter((t) => !['map', 'activity', 'routes'].includes(t.id));
 
   if (shareToken || authState === 'share') {
     return (
@@ -244,10 +268,7 @@ export default function App() {
               type="button"
               className={`app-tab ${tab === t.id ? 'on' : ''}`}
               aria-pressed={tab === t.id}
-              onClick={() => {
-                setPanelOpen(false);
-                setTab(t.id);
-              }}
+              onClick={() => setTabAndClose(t.id)}
             >
               {t.label}
             </button>
@@ -304,17 +325,58 @@ export default function App() {
           </div>
         )}
 
+        <div className="map-brand-chip" aria-hidden>
+          circo<span>life</span>
+        </div>
+
         <div className="map-mobile-tray">
+          {mapMenu === 'insights' && (
+            <div className="map-tool-sheet" role="dialog" aria-label="Insights">
+              <InsightDock
+                mode={insightMode}
+                days={insightDays}
+                onMode={pickInsight}
+                onDays={setInsightDays}
+                summary={insightData.summary}
+              />
+            </div>
+          )}
+          {mapMenu === 'legend' && (
+            <div className="map-tool-sheet map-tool-sheet-legend" role="dialog" aria-label="Legend">
+              {insightMode === 'off' ? (
+                <>
+                  <strong>Precision</strong>
+                  <div className="legend-row"><span className="legend-swatch exact" /> Exact / geocoded</div>
+                  <div className="legend-row"><span className="legend-swatch approx" /> Check-in (~1 km)</div>
+                  <div className="legend-row"><span className="legend-swatch pincode" /> Pincode / territory</div>
+                  <div className="legend-row"><span className="legend-swatch inherited" /> Inherited</div>
+                </>
+              ) : insightMode === 'heat' ? (
+                <>
+                  <strong>Visit heat</strong>
+                  <div className="legend-row"><span className="legend-swatch heat-cool" /> Quiet</div>
+                  <div className="legend-row"><span className="legend-swatch heat-hot" /> Heavy check-ins</div>
+                </>
+              ) : (
+                <>
+                  <strong>{insightMode === 'untouched' ? 'Untouched' : 'Coverage'}</strong>
+                  <div className="legend-row"><span className="legend-swatch zone-untouched" /> No visits · has leads</div>
+                  {insightMode === 'coverage' && (
+                    <>
+                      <div className="legend-row"><span className="legend-swatch zone-thin" /> Thin vs leads</div>
+                      <div className="legend-row"><span className="legend-swatch zone-covered" /> Covered</div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           <div className="map-chrome-docks">
             <LayerDock active={active} toggle={toggle} counts={counts} />
             <InsightDock
               mode={insightMode}
               days={insightDays}
-              onMode={(m) => {
-                setInsightMode(m);
-                if (m !== 'off') setOppOpen(true);
-                else setOppOpen(false);
-              }}
+              onMode={pickInsight}
               onDays={setInsightDays}
               summary={insightData.summary}
             />
@@ -332,13 +394,32 @@ export default function App() {
               <button
                 type="button"
                 className="opp-fab"
-                onClick={() => setOppOpen(true)}
+                onClick={() => { setMapMenu(null); setOppOpen(true); }}
               >
+                <IconZones />
                 <span className="opp-fab-full">Opportunities</span>
                 <span className="opp-fab-short">Zones</span>
                 {insightData.top?.length > 0 && <span className="badge">{insightData.top.length}</span>}
               </button>
             )}
+            <button
+              type="button"
+              className={`map-tool-btn ${insightMode !== 'off' ? 'on' : ''} ${mapMenu === 'insights' ? 'open' : ''}`}
+              aria-expanded={mapMenu === 'insights'}
+              onClick={() => setMapMenu((m) => (m === 'insights' ? null : 'insights'))}
+            >
+              <IconInsights />
+              <span>{insightMode === 'off' ? 'Insights' : insightLabel}</span>
+            </button>
+            <button
+              type="button"
+              className={`map-tool-btn ${mapMenu === 'legend' ? 'open' : ''}`}
+              aria-expanded={mapMenu === 'legend'}
+              onClick={() => setMapMenu((m) => (m === 'legend' ? null : 'legend'))}
+            >
+              <IconLegend />
+              <span>Legend</span>
+            </button>
             <details
               className="map-legend"
               open={legendOpen}
@@ -450,6 +531,16 @@ export default function App() {
       {tab === 'gaps' && <GapsPanel onFocusMap={focusFromGap} />}
       {tab === 'admin' && me?.admin && <AdminPanel me={me} />}
       {tab === 'help' && <HelpGuide onOpenTab={setTab} isAdmin={Boolean(me?.admin)} />}
+
+      <MobileNav
+        tab={tab}
+        onTab={setTabAndClose}
+        moreOpen={moreOpen}
+        setMoreOpen={setMoreOpen}
+        moreTabs={moreTabs}
+        me={me}
+        onLogout={doLogout}
+      />
     </div>
   );
 }

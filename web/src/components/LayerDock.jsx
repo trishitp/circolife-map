@@ -1,8 +1,8 @@
 const META = [
-  { key: 'leads', label: 'Leads', color: 'var(--layer-leads)' },
-  { key: 'accounts', label: 'Accounts', color: 'var(--layer-accounts)' },
-  { key: 'meetings', label: 'Meetings', color: 'var(--layer-meetings)' },
-  { key: 'assets', label: 'Assets', color: 'var(--layer-assets)' },
+  { key: 'leads', label: 'Leads', short: 'Leads', color: 'var(--layer-leads)' },
+  { key: 'accounts', label: 'Accounts', short: 'Accts', color: 'var(--layer-accounts)' },
+  { key: 'meetings', label: 'Meetings', short: 'Meet', color: 'var(--layer-meetings)' },
+  { key: 'assets', label: 'Assets', short: 'Assets', color: 'var(--layer-assets)' },
 ];
 
 const abbr = (n) => {
@@ -25,7 +25,8 @@ export default function LayerDock({ active, toggle, counts }) {
           onClick={() => toggle(l.key)}
         >
           <span className="dot" style={{ background: l.color }} aria-hidden />
-          {l.label}
+          <span className="layer-label-full">{l.label}</span>
+          <span className="layer-label-short">{l.short}</span>
           <span className="count">{abbr(counts[l.key])}</span>
         </button>
       ))}

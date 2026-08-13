@@ -39,7 +39,7 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
         <ol className="help-steps">
           <li>
             <strong>Toggle layers</strong>
-            <span>Leads, Accounts, Meetings, Assets — use the dark dock. Counts are totals in the database (not viewport).</span>
+            <span>Leads, Accounts, Meetings, Assets — use the layer tiles. Counts are totals in the database (not viewport).</span>
           </li>
           <li>
             <strong>Pan &amp; zoom</strong>

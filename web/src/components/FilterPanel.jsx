@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { IconFilter } from './icons';
 
 const PRECISION_LABELS = {
   exact: 'Exact',
@@ -376,7 +377,8 @@ export default function FilterPanel({ options, filters, setFilters, open, setOpe
   if (!open) {
     return (
       <button type="button" className="filter-fab" onClick={() => setOpen(true)}>
-        Filters
+        <IconFilter />
+        <span className="filter-fab-text">Filters</span>
         {activeCount > 0 && <span className="badge">{activeCount}</span>}
       </button>
     );

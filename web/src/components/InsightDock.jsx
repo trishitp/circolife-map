@@ -1,9 +1,10 @@
-const MODES = [
+export const INSIGHT_MODES = [
   { id: 'off', label: 'Off', short: 'Off' },
   { id: 'untouched', label: 'Untouched', short: 'Untouched' },
   { id: 'coverage', label: 'Coverage', short: 'Cover' },
   { id: 'heat', label: 'Visit heat', short: 'Heat' },
 ];
+const MODES = INSIGHT_MODES;
 
 const DAYS = [
   { id: 30, label: '30d' },
