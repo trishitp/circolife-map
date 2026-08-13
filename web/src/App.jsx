@@ -46,6 +46,14 @@ function takeAuthFromUrl() {
   return { token, error };
 }
 
+function accountInitials(name, email) {
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  if (parts[0]) return parts[0].slice(0, 2).toUpperCase();
+  const e = String(email || '').trim();
+  return e ? e[0].toUpperCase() : '•';
+}
+
 function parseShareToken() {
   if (typeof window === 'undefined') return null;
   const hash = (window.location.hash || '').replace(/^#/, '');
@@ -77,6 +85,9 @@ export default function App() {
   const [insightDays, setInsightDays] = useState(90);
   const [insightData, setInsightData] = useState({ top: [], ghosts: [], summary: null });
   const [oppOpen, setOppOpen] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(() => (
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 721px)').matches : true
+  ));
   const [flyRequest, setFlyRequest] = useState(null);
   const [me, setMe] = useState(null);
   const [loginError, setLoginError] = useState(null);
@@ -245,12 +256,18 @@ export default function App() {
         {me?.email && (
           <details className="account-menu">
             <summary className="account-summary" title={me.email}>
-              {me.name || me.email}
+              <span className="account-name-full">{me.name || me.email}</span>
+              <span className="account-name-short" aria-hidden>
+                {accountInitials(me.name, me.email)}
+              </span>
             </summary>
             <div className="account-menu-body">
               <div className="account-email">{me.email}</div>
               <div className="account-role">{me.admin ? 'Admin' : 'User'}</div>
               <p className="muted" style={{ margin: 0, fontSize: 12 }}>Signed in with Zoho</p>
+              <button type="button" className="btn ghost sm account-logout-mobile" onClick={doLogout}>
+                Log out
+              </button>
             </div>
           </details>
         )}
@@ -287,19 +304,77 @@ export default function App() {
           </div>
         )}
 
-        <div className="map-chrome-docks">
-          <LayerDock active={active} toggle={toggle} counts={counts} />
-          <InsightDock
-            mode={insightMode}
-            days={insightDays}
-            onMode={(m) => {
-              setInsightMode(m);
-              if (m !== 'off') setOppOpen(true);
-              else setOppOpen(false);
-            }}
-            onDays={setInsightDays}
-            summary={insightData.summary}
-          />
+        <div className="map-mobile-tray">
+          <div className="map-chrome-docks">
+            <LayerDock active={active} toggle={toggle} counts={counts} />
+            <InsightDock
+              mode={insightMode}
+              days={insightDays}
+              onMode={(m) => {
+                setInsightMode(m);
+                if (m !== 'off') setOppOpen(true);
+                else setOppOpen(false);
+              }}
+              onDays={setInsightDays}
+              summary={insightData.summary}
+            />
+          </div>
+          <div className="map-bottom-tools">
+            <FilterPanel
+              options={options}
+              filters={filters}
+              setFilters={setFilters}
+              open={panelOpen}
+              setOpen={openFilters}
+              optionsError={optionsError}
+            />
+            {insightMode !== 'off' && !oppOpen && (
+              <button
+                type="button"
+                className="opp-fab"
+                onClick={() => setOppOpen(true)}
+              >
+                <span className="opp-fab-full">Opportunities</span>
+                <span className="opp-fab-short">Zones</span>
+                {insightData.top?.length > 0 && <span className="badge">{insightData.top.length}</span>}
+              </button>
+            )}
+            <details
+              className="map-legend"
+              open={legendOpen}
+              onToggle={(e) => setLegendOpen(e.currentTarget.open)}
+            >
+              <summary className="map-legend-toggle">Legend</summary>
+              <div className="map-legend-body">
+                {insightMode === 'off' ? (
+                  <>
+                    <strong>Precision</strong>
+                    <div className="legend-row"><span className="legend-swatch exact" /> Exact / geocoded</div>
+                    <div className="legend-row"><span className="legend-swatch approx" /> Check-in (~1 km)</div>
+                    <div className="legend-row"><span className="legend-swatch pincode" /> Pincode / territory</div>
+                    <div className="legend-row"><span className="legend-swatch inherited" /> Inherited</div>
+                  </>
+                ) : insightMode === 'heat' ? (
+                  <>
+                    <strong>Visit heat</strong>
+                    <div className="legend-row"><span className="legend-swatch heat-cool" /> Quiet</div>
+                    <div className="legend-row"><span className="legend-swatch heat-hot" /> Heavy check-ins</div>
+                  </>
+                ) : (
+                  <>
+                    <strong>{insightMode === 'untouched' ? 'Untouched' : 'Coverage'}</strong>
+                    <div className="legend-row"><span className="legend-swatch zone-untouched" /> No visits · has leads</div>
+                    {insightMode === 'coverage' && (
+                      <>
+                        <div className="legend-row"><span className="legend-swatch zone-thin" /> Thin vs leads</div>
+                        <div className="legend-row"><span className="legend-swatch zone-covered" /> Covered</div>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </details>
+          </div>
         </div>
 
         <div className={`map-status ${loading ? 'show' : ''}`} aria-live="polite">
@@ -353,47 +428,6 @@ export default function App() {
           onFlyHandled={() => setFlyRequest(null)}
         />
 
-        <div className="map-legend" aria-hidden>
-          {insightMode === 'off' ? (
-            <>
-              <strong>Precision</strong>
-              <div className="legend-row"><span className="legend-swatch exact" /> Exact / geocoded</div>
-              <div className="legend-row"><span className="legend-swatch approx" /> Check-in (~1 km)</div>
-              <div className="legend-row"><span className="legend-swatch pincode" /> Pincode / territory</div>
-              <div className="legend-row"><span className="legend-swatch inherited" /> Inherited</div>
-            </>
-          ) : insightMode === 'heat' ? (
-            <>
-              <strong>Visit heat</strong>
-              <div className="legend-row"><span className="legend-swatch heat-cool" /> Quiet</div>
-              <div className="legend-row"><span className="legend-swatch heat-hot" /> Heavy check-ins</div>
-            </>
-          ) : (
-            <>
-              <strong>{insightMode === 'untouched' ? 'Untouched' : 'Coverage'}</strong>
-              <div className="legend-row"><span className="legend-swatch zone-untouched" /> No visits · has leads</div>
-              {insightMode === 'coverage' && (
-                <>
-                  <div className="legend-row"><span className="legend-swatch zone-thin" /> Thin vs leads</div>
-                  <div className="legend-row"><span className="legend-swatch zone-covered" /> Covered</div>
-                </>
-              )}
-            </>
-          )}
-        </div>
-
-        {insightMode !== 'off' && !oppOpen && (
-          <button
-            type="button"
-            className="opp-fab"
-            onClick={() => setOppOpen(true)}
-          >
-            <span className="opp-fab-full">Opportunities</span>
-            <span className="opp-fab-short">Zones</span>
-            {insightData.top?.length > 0 && <span className="badge">{insightData.top.length}</span>}
-          </button>
-        )}
-
         <OpportunityPanel
           open={oppOpen && insightMode !== 'off'}
           onClose={() => setOppOpen(false)}
@@ -405,15 +439,6 @@ export default function App() {
             setSelected(p);
             if (p) setOppOpen(false);
           }}
-        />
-
-        <FilterPanel
-          options={options}
-          filters={filters}
-          setFilters={setFilters}
-          open={panelOpen}
-          setOpen={openFilters}
-          optionsError={optionsError}
         />
 
         <DetailCard p={selected} onClose={() => setSelected(null)} />

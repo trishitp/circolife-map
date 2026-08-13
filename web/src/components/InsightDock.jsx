@@ -1,8 +1,8 @@
 const MODES = [
-  { id: 'off', label: 'Off' },
-  { id: 'untouched', label: 'Untouched' },
-  { id: 'coverage', label: 'Coverage' },
-  { id: 'heat', label: 'Visit heat' },
+  { id: 'off', label: 'Off', short: 'Off' },
+  { id: 'untouched', label: 'Untouched', short: 'Untouched' },
+  { id: 'coverage', label: 'Coverage', short: 'Cover' },
+  { id: 'heat', label: 'Visit heat', short: 'Heat' },
 ];
 
 const DAYS = [
@@ -23,7 +23,8 @@ export default function InsightDock({ mode, days, onMode, onDays, summary }) {
             aria-pressed={mode === m.id}
             onClick={() => onMode(m.id)}
           >
-            {m.label}
+            <span className="insight-label-full">{m.label}</span>
+            <span className="insight-label-short">{m.short}</span>
           </button>
         ))}
       </div>

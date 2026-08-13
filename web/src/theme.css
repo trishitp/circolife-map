@@ -184,6 +184,11 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   transition: top 0.18s ease, bottom 0.18s ease;
 }
 .map-chrome-docks > * { pointer-events: auto; }
+.map-mobile-tray,
+.map-bottom-tools {
+  display: contents;
+}
+.insight-label-short { display: none; }
 
 .layer-dock {
   position: relative;
@@ -276,50 +281,172 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
 }
 @media (max-width: 720px) {
   .top-chrome {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
     gap: 8px;
     padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px;
   }
-  .brand {
+  .app-shell.is-map .brand { display: none; }
+  .app-shell.is-page .brand {
     padding: 8px 10px;
     font-size: 15px;
-    flex-shrink: 0;
+    grid-column: 1;
+  }
+  .app-shell.is-page .top-chrome {
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
   .brand small { display: none; }
   .app-tabs {
     margin-left: 0;
-    flex: 1;
     min-width: 0;
     max-width: none;
+    width: 100%;
     padding: 4px;
   }
   .app-tab { padding: 8px 10px; font-size: 12px; min-height: 40px; }
-  .logout-btn {
-    margin-left: 0;
-    flex-shrink: 0;
-    padding: 8px 10px;
-    font-size: 12px;
-    min-height: 40px;
+  .logout-btn { display: none; }
+  .account-name-full { display: none; }
+  .account-name-short { display: inline; }
+  .account-logout-mobile { display: inline-flex; }
+  .account-summary {
+    max-width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 14px;
   }
-  .map-legend {
+  .map-mobile-tray {
     display: flex;
-    top: auto;
-    bottom: calc(128px + var(--safe-b));
-    left: 12px;
-    right: auto;
-    max-width: min(200px, calc(100vw - 24px));
-    padding: 8px 10px;
-    font-size: 10px;
-    gap: 4px;
+    flex-direction: column;
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + var(--safe-b));
+    z-index: 5;
+    gap: 8px;
+    pointer-events: none;
+    max-width: none;
   }
-  .map-legend strong { font-size: 10px; margin-bottom: 2px; }
-  .legend-row { gap: 6px; }
-  .map-shell.has-filter-chips .map-legend,
-  .map-shell.has-insights .map-legend,
-  .map-shell.filters-open .map-legend {
-    display: none;
+  .map-mobile-tray > *,
+  .map-bottom-tools > * { pointer-events: auto; }
+  .map-bottom-tools {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .map-chrome-docks {
+    position: relative;
+    top: auto;
+    bottom: auto;
+    left: auto;
+    right: auto;
+    transform: none;
+    flex-direction: column;
+    align-items: stretch;
+    max-width: none;
+    gap: 6px;
+    animation: none;
+  }
+  .map-shell.has-issue .map-chrome-docks,
+  .map-shell.has-filter-chips .map-chrome-docks,
+  .map-shell.has-issue.has-filter-chips .map-chrome-docks {
+    top: auto;
+    bottom: auto;
   }
   .layer-dock {
     justify-content: flex-start;
+    width: 100%;
+  }
+  .layer-pill {
+    padding: 8px 10px;
+    min-height: 40px;
+    font-size: 12px;
+  }
+  .insight-dock { align-items: stretch; }
+  .insight-modes,
+  .insight-days {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .insight-label-full { display: none; }
+  .insight-label-short { display: inline; }
+  .insight-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 8px;
+    min-height: 40px;
+    flex: 1;
+    justify-content: center;
+  }
+  .filter-fab {
+    position: relative;
+    bottom: auto;
+    left: auto;
+    animation: none;
+    flex: 1;
+    justify-content: center;
+  }
+  .opp-fab {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    animation: none;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  .opp-fab .opp-fab-full { display: none; }
+  .opp-fab .opp-fab-short { display: inline; }
+  .map-legend {
+    position: relative;
+    top: auto;
+    bottom: auto;
+    left: auto;
+    right: auto;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    animation: none;
+    flex: 0 0 auto;
+  }
+  .map-legend-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--ink);
+    min-height: 44px;
+    min-width: 72px;
+    padding: 10px 12px;
+    list-style: none;
+  }
+  .map-legend[open] {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    min-width: 200px;
+    padding: 6px 10px 10px;
+  }
+  .map-legend[open] .map-legend-toggle {
+    justify-content: space-between;
+    min-height: 36px;
+    padding: 6px 4px;
+  }
+  .map-legend[open] .map-legend-toggle::after {
+    content: '×';
+    font-size: 16px;
+    opacity: 0.5;
+  }
+  .map-shell.has-filter-chips .map-legend,
+  .map-shell.has-insights .map-legend,
+  .map-shell.filters-open .map-legend {
+    display: flex;
   }
   .map-issue.map-issue-top {
     top: calc(56px + env(safe-area-inset-top, 0px));
@@ -328,15 +455,22 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
     transform: none;
     max-width: none;
     width: auto;
+    padding: 8px 12px;
+    font-size: 12px;
   }
-  .filter-fab {
-    bottom: calc(16px + var(--safe-b));
-    left: 12px;
+  .map-issue-text {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .map-shell.filters-open .map-mobile-tray {
+    z-index: 28;
   }
   .map-shell.filters-open .map-chrome-docks,
-  .map-shell.filters-open .filter-fab,
   .map-shell.filters-open .map-filter-chips,
-  .map-shell.filters-open .map-legend {
+  .map-shell.filters-open .map-legend,
+  .map-shell.filters-open .opp-fab {
     visibility: hidden;
     pointer-events: none;
   }
@@ -684,6 +818,13 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   color: var(--ink-soft);
   animation: rise 0.4s ease-out 0.15s both;
 }
+.map-legend-toggle { display: none; }
+.map-legend-toggle::-webkit-details-marker { display: none; }
+.map-legend-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .map-legend strong {
   font-family: var(--font-display);
   font-size: 10px;
@@ -760,6 +901,7 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   background: rgba(254, 249, 245, 0.14);
   color: #fff;
 }
+.insight-label-short { display: none; }
 .insight-stat {
   color: #f3c4bc;
   font-size: 11px;
@@ -878,7 +1020,7 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
 .opp-kind.thin { color: #8a6a18; }
 .opp-kind.covered { color: #3d7a32; }
 
-@media (max-width: 1100px) {
+@media (max-width: 1100px) and (min-width: 721px) {
   .insight-dock {
     align-items: stretch;
   }
@@ -890,51 +1032,17 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   }
 }
 @media (max-width: 720px) {
-  .map-chrome-docks {
-    top: auto;
-    bottom: calc(72px + var(--safe-b));
-    left: 12px;
-    right: 12px;
-    transform: none;
-    flex-direction: column-reverse;
-    align-items: stretch;
-    max-width: none;
-    animation: rise 0.45s ease-out both;
-  }
-  .map-shell.has-issue .map-chrome-docks,
-  .map-shell.has-filter-chips .map-chrome-docks,
-  .map-shell.has-issue.has-filter-chips .map-chrome-docks {
-    top: auto;
-    bottom: calc(72px + var(--safe-b));
-  }
   .insight-dock {
     align-items: stretch;
   }
-  .map-shell.filters-open .insight-dock,
   .map-shell.filters-open .opp-panel,
-  .map-shell.filters-open .opp-fab,
-  .map-shell.has-selected .map-chrome-docks,
-  .map-shell.has-selected .map-legend,
-  .map-shell.has-selected .filter-fab,
-  .map-shell.has-selected .opp-fab,
+  .map-shell.has-selected .map-mobile-tray,
   .map-shell.has-selected .google-maps-logo,
-  .map-shell.has-opp .map-chrome-docks,
-  .map-shell.has-opp .map-legend,
-  .map-shell.has-opp .filter-fab,
-  .map-shell.has-opp .opp-fab,
+  .map-shell.has-opp .map-mobile-tray,
   .map-shell.has-opp .google-maps-logo {
     visibility: hidden;
     pointer-events: none;
   }
-  .opp-fab {
-    left: 108px;
-    right: auto;
-    bottom: calc(16px + var(--safe-b));
-    padding: 12px 12px;
-    font-size: 12px;
-  }
-  .opp-fab .opp-fab-full { display: none; }
-  .opp-fab .opp-fab-short { display: inline; }
   .opp-panel {
     left: 0;
     right: 0;
@@ -1777,14 +1885,19 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   bottom: calc(72px + var(--safe-b));
 }
 @media (max-width: 640px) {
-  .maplibregl-ctrl-bottom-right { bottom: calc(128px + var(--safe-b)); }
-  .maplibregl-ctrl-bottom-left { display: none; }
-  .map-shell.has-insights .maplibregl-ctrl-bottom-right {
-    bottom: calc(188px + var(--safe-b));
+  .maplibregl-ctrl-bottom-right {
+    top: calc(118px + env(safe-area-inset-top, 0px));
+    bottom: auto;
+    right: 10px;
   }
+  .map-shell.has-issue .maplibregl-ctrl-bottom-right {
+    top: calc(168px + env(safe-area-inset-top, 0px));
+  }
+  .maplibregl-ctrl-bottom-left { display: none; }
   .map-shell.has-selected .maplibregl-ctrl-bottom-right,
   .map-shell.has-opp .maplibregl-ctrl-bottom-right,
   .map-shell.filters-open .maplibregl-ctrl-bottom-right {
+    top: auto;
     bottom: calc(16px + var(--safe-b));
   }
 }
@@ -1837,17 +1950,7 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   left: 8px;
 }
 @media (max-width: 720px) {
-  .google-maps-logo {
-    left: auto;
-    right: 12px;
-    bottom: calc(78px + var(--safe-b));
-  }
-  .map-shell.has-insights .google-maps-logo,
-  .map-shell.filters-open .google-maps-logo,
-  .map-shell.has-selected .google-maps-logo,
-  .map-shell.has-opp .google-maps-logo {
-    display: none;
-  }
+  .google-maps-logo { display: none; }
 }
 
 @keyframes rise {
@@ -1954,6 +2057,8 @@ a.login-btn {
   display: flex;
   align-items: center;
 }
+.account-name-short { display: none; }
+.account-logout-mobile { display: none; width: 100%; margin-top: 4px; }
 .account-summary::-webkit-details-marker { display: none; }
 .account-menu-body {
   position: absolute;
