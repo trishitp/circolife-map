@@ -39,7 +39,7 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
         <ol className="help-steps">
           <li>
             <strong>Layers</strong>
-            <span>Turn Leads, Accounts, Meetings, and Assets on or off. Counts are totals in the database, not just what is on screen.</span>
+            <span>Turn Leads, Accounts, Meetings, and Assets on or off. Assets shows installed AC units only — not parent containers. Accounts shows only where at least one asset is on the map. Layer counts match those rules.</span>
           </li>
           <li>
             <strong>Pan and zoom</strong>
@@ -131,15 +131,15 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
         <ol className="help-steps">
           <li>
             <strong>Choose RM and date</strong>
-            <span>Load that day’s meetings. Territory and lead source also apply to nearby stops.</span>
+            <span>Meetings load automatically. Start from last check-in when we have it, or from the first meeting.</span>
           </li>
           <li>
             <strong>Build the plan</strong>
-            <span>Reorder stops, add nearby leads or accounts, and remove anything that is not needed.</span>
+            <span>Tap orange pins to add nearby leads or accounts. Reorder with the arrows, or remove a stop.</span>
           </li>
           <li>
-            <strong>Optimize</strong>
-            <span>Orders stops by road time when Google Routes is enabled.</span>
+            <strong>Get drive times</strong>
+            <span>Keep times follows the calendar. Shortest drive reorders for less travel.</span>
           </li>
           <li>
             <strong>Share with field</strong>
@@ -196,7 +196,7 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
           <button type="button" className="btn ghost sm" onClick={go('routes')}>Open Routes</button>
         </div>
         <ol className="help-steps">
-          <li>After Optimize, tap <strong>Share with field</strong> — the link is copied (and the share sheet opens on mobile).</li>
+          <li>After drive times, tap <strong>Share with field</strong> — the link is copied (and the share sheet opens on mobile).</li>
           <li>The recipient opens the link with no Maps login required.</li>
           <li>They can follow the full route, navigate to one stop, or open the record in CRM.</li>
         </ol>

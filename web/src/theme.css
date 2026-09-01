@@ -2614,6 +2614,12 @@ a.login-btn {
     height: min(42vh, 360px);
     min-height: 220px;
   }
+  .route-map {
+    height: min(42vh, 360px);
+    min-height: 220px;
+  }
+  .routes-cta-bar { position: sticky; top: 0; z-index: 3; padding: 8px 0; background: var(--canvas); }
+  .route-stop-actions { max-width: none; }
   .walk-playbar { padding: 8px 10px; }
 }
 .activity-footnote {
@@ -3062,6 +3068,78 @@ a.login-btn {
   align-items: flex-end;
   padding-bottom: 2px;
 }
+.routes-toolbar { row-gap: 10px; }
+.routes-cta-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 12px;
+}
+.route-mode-toggle {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.route-empty {
+  padding: 20px 22px;
+  margin: 8px 0 16px;
+}
+.route-empty h2 { margin: 0 0 12px; }
+.route-empty .help-steps { margin: 0; }
+.route-focus-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 252, 250, 0.98);
+}
+.route-focus-card strong {
+  display: block;
+  margin: 4px 0 2px;
+  font-size: 14px;
+}
+.route-focus-addr {
+  margin: 0 0 4px;
+  font-size: 12px;
+  max-width: 52ch;
+}
+.route-focus-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.route-nearby-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 10px;
+}
+.route-nearby-hit {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.route-nearby-row.on {
+  background: rgba(95, 169, 198, 0.1);
+  border-radius: 8px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
 .routes-layout { margin-top: 8px; }
 .routes-sidebar {
   display: flex;
@@ -3083,26 +3161,31 @@ a.login-btn {
   text-align: right;
   max-width: 55%;
 }
-.route-stop-list { max-height: 360px; }
+.route-stop-list { max-height: min(52vh, 420px); }
 .route-stop {
   position: relative;
 }
 .route-stop-actions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 2px;
-  padding: 6px 8px 6px 0;
+  padding: 8px 8px 8px 0;
+  max-width: 132px;
 }
 .icon-btn {
   border: 0;
   background: transparent;
   color: var(--ink-soft);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
-  padding: 2px 6px;
-  border-radius: 6px;
+  padding: 6px 8px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 8px;
 }
 .icon-btn:hover { background: rgba(46, 31, 64, 0.08); color: var(--ink); }
 .route-nearby-list {
@@ -3127,7 +3210,7 @@ a.login-btn {
 .route-nearby-row:last-child { border-bottom: 0; }
 .route-map {
   width: 100%;
-  height: 400px;
+  height: min(52vh, 480px);
   min-height: 300px;
 }
 .routes-map-actions {
@@ -3167,14 +3250,30 @@ a.login-btn {
 }
 .route-pin-dot {
   display: block;
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #8A8494;
   border: 2px solid #FFFCFA;
   box-shadow: 0 1px 4px rgba(46, 31, 64, 0.3);
 }
 .route-pin--nearby .route-pin-dot { background: #C45C26; }
+.route-pin--origin { z-index: 3; }
+.route-pin-origin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #2F6B4F;
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  border: 2px solid #FFFCFA;
+  box-shadow: 0 2px 8px rgba(46, 31, 64, 0.35);
+}
 .route-pin-body {
   position: relative;
   display: block;

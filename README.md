@@ -67,9 +67,9 @@ Gaps = cannot plot. Discrepancies = can plot (or partially resolve) but sources 
 | Source | Rows | Finding | Consequence in code |
 |---|---|---|---|
 | Leads | 74,378 | `Latitude`/`Longitude` 100% empty; `City` 99.9% empty; `Search Address - Lat/Long` 4.3%; **Pin Code 88%** | Tier-0 uses Search Address lat/long; geocode query = Street + Pin Code + territory city (never the City field); pincode then territory centroid fallbacks |
-| Accounts | 4,205 | **Billing Code 0%**, Billing City 7%, Billing Street 78% | Account pincode inherited from converted Lead where possible; else street geocode / territory |
+| Accounts | 4,205 | **Billing Code 0%**, Billing City 7%, Billing Street 78% | Account pincode inherited from converted Lead where possible; else street geocode / territory. Map layer shows accounts with at least one plottable asset only. |
 | Meeting Check-In | high volume with 2dp lat/lng | Check-in adopted widely but Analytics rounds to ~1 km | Meetings layer = all meetings; check-in → `approx`; else inherit lead/account |
-| Assets (FSM) | 10,446 | `Asset Status` unmaintained; `Address` is a lookup id | Non-Uninstalled assets synced; location = FSM address or linked Account |
+| Assets (FSM) | 10,446 | `Asset Status` unmaintained; `Address` is a lookup id; `Parent Asset` marks hierarchy | Non-Uninstalled child/standalone assets synced (parent containers excluded); location = FSM address or linked Account |
 
 ## Run (local)
 

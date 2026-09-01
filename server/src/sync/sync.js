@@ -8,7 +8,7 @@ import { q } from '../db.js';
 import { exportSql } from '../zoho/analyticsClient.js';
 import { cfg } from '../config.js';
 import {
-  LEADS_SQL, ACCOUNTS_SQL, MEETINGS_SQL, ASSETS_SQL, USERS_SQL,
+  LEADS_SQL, ACCOUNTS_SQL, MEETINGS_SQL, ASSETS_SQL, ASSET_PARENT_IDS_SQL, USERS_SQL,
   FSM_ADDRESSES_SQL, FSM_COMPANIES_SQL, ACCOUNT_ADDRESS_SQL,
 } from './extractQueries.js';
 import { resolvePoint, refreshTerritoryCentroids } from '../geocode/pipeline.js';
@@ -17,6 +17,7 @@ import {
   buildFullAddress, parseCoords, isLowPrecisionCoord, inIndia,
 } from '../geocode/address.js';
 import { rebuildDiscrepancies } from '../discrepancy/engine.js';
+import { redactMacInText } from '../privacy/mac.js';
 
 const limit = pLimit(5);
 const csv = (text) => parse(text, { columns: true, skip_empty_lines: true, bom: true });
@@ -510,12 +511,35 @@ function resolveAssetTitle(r) {
   const name = cleanText(col(r, 'Asset Name'));
   if (name) {
     const stripped = name.replace(/\s*\(([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}\)\s*$/i, '').trim();
-    return stripped || name;
+    return stripped || 'Asset';
   }
-  return cleanText(r.mac) || 'Asset';
+  return 'Asset';
 }
 
 async function syncAssets() {
+  // Purge parent/container rows still in the map from before the exclusion rule.
+  try {
+    const parentRows = csv(await exportSql(ASSET_PARENT_IDS_SQL));
+    const parentIds = parentRows
+      .map((r) => normalizeZohoId(r.parent_id))
+      .filter(Boolean);
+    if (parentIds.length) {
+      const del = await q(
+        `DELETE FROM map_points WHERE layer='assets' AND source_id = ANY($1::text[])`,
+        [parentIds],
+      );
+      const delLog = await q(
+        `DELETE FROM unplottable_log WHERE layer='assets' AND source_id = ANY($1::text[])`,
+        [parentIds],
+      );
+      if (del.rowCount || delLog.rowCount) {
+        console.log(`[assets] purged ${del.rowCount} parent rows, ${delLog.rowCount} gap rows`);
+      }
+    }
+  } catch (e) {
+    console.warn(`[assets] parent purge skipped: ${e.message}`);
+  }
+
   const rows = csv(await exportSql(ASSETS_SQL));
   const addrRows = csv(await exportSql(FSM_ADDRESSES_SQL, cfg.zoho.fsmWorkspaceId));
   const addrs = new Map();
@@ -619,8 +643,10 @@ async function syncAssets() {
     seenIds.push(sourceId);
 
     const assetNumber = cleanText(col(r, 'Asset Number')) || null;
-    const assetName = cleanText(col(r, 'Asset Name')) || null;
+    const assetName = redactMacInText(cleanText(col(r, 'Asset Name')) || '') || null;
     const mac = cleanText(r.mac) || null;
+    const parentAssetId = normalizeZohoId(r.parent_asset_id)
+      || normalizeZohoId(col(r, 'Parent Asset')) || null;
     const title = resolveAssetTitle(r);
 
     // Assets.Company is an FSM Company id (524…). Bridge to CRM via ZCRM Id.
@@ -840,6 +866,7 @@ async function syncAssets() {
         addressSource,
         accountId,
         accountName: a?.title || fsmCo?.name || null,
+        parentAssetId,
         fsmCompanyId: fsmCompanyId || null,
         fsmCompanyName: fsmCo?.name || null,
         installationDate: r['Installation Date'] || null,

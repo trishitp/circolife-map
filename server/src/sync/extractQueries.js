@@ -15,6 +15,8 @@
 //  - Assets: "Asset Status" is unmaintained (only ~13 "Installed"; most are "New").
 //    Installation Date covers ~32% (3.6k of 11k) — do NOT use it as the sync filter
 //    or the map undercounts the installed base. Sync all assets except Uninstalled.
+//    Parent Asset is a self-lookup — parent/container rows are excluded (map shows
+//    child units and standalone assets only).
 //    Title prefers Asset Number; when FSM Address is missing/unusable, fall back
 //    to linked account shipping (then billing), geocoded — not only account pin.
 //
@@ -105,9 +107,20 @@ SELECT CAST(s."Id" AS CHAR) AS "Id",
        s."Installation Date" AS "Installation Date",
        CAST(s."Company" AS CHAR) AS account_id,
        CAST(s."Address" AS CHAR) AS address_id,
+       CAST(s."Parent Asset" AS CHAR) AS parent_asset_id,
        s."Created Time" AS "Created Time", s."Modified Time" AS "Modified Time"
 FROM "Assets" s
-WHERE s."Asset Status" IS NULL OR s."Asset Status" NOT IN ('Uninstalled')`;
+WHERE (s."Asset Status" IS NULL OR s."Asset Status" NOT IN ('Uninstalled'))
+  AND NOT EXISTS (
+    SELECT 1 FROM "Assets" child
+    WHERE CAST(child."Parent Asset" AS CHAR) = CAST(s."Id" AS CHAR)
+  )`;
+
+/** Distinct parent asset ids — used to purge container rows from the map on sync. */
+export const ASSET_PARENT_IDS_SQL = `
+SELECT DISTINCT CAST(child."Parent Asset" AS CHAR) AS parent_id
+FROM "Assets" child
+WHERE child."Parent Asset" IS NOT NULL`;
 
 // Shipping / billing for assets fallback when FSM Address is missing.
 // Joins converted Lead for Shipping Street/Code (Accounts.Billing Code is empty).

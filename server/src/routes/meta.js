@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { q } from '../db.js';
 import { cfg } from '../config.js';
 import { TERRITORY_GROUP_KEYS } from '../filters/mapFilters.js';
+import { sqlMapPointVisible } from '../filters/layerPolicy.js';
 import { syncUsers } from '../sync/sync.js';
 import { recordUsage, isClientSku } from '../usage/meter.js';
 import { getMapMarkerStyle } from '../mapStyle.js';
@@ -174,7 +175,9 @@ meta.get('/stats', async (_req, res) => {
   try {
     const { rows } = await q(`
       SELECT layer, precision, COUNT(*)::int AS n
-      FROM map_points GROUP BY layer, precision ORDER BY layer`);
+      FROM map_points
+      WHERE ${sqlMapPointVisible()}
+      GROUP BY layer, precision ORDER BY layer`);
     res.json(rows);
   } catch (e) {
     console.error('[meta/stats]', e);

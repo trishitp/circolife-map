@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { q } from '../db.js';
+import { redactMacInText } from '../privacy/mac.js';
 
 export const gaps = Router();
 
@@ -111,6 +112,7 @@ gaps.get('/', async (req, res) => {
     limit, offset,
     rows: rows.map((r) => ({
       ...r,
+      title: redactMacInText(r.title),
       reason: classifyReason(r),
     })),
   });

@@ -3,6 +3,8 @@
 import { Router } from 'express';
 import { q } from '../db.js';
 import { buildMapFilterClauses } from '../filters/mapFilters.js';
+import { layerVisibilityClauses } from '../filters/layerPolicy.js';
+import { redactMacInText, scrubPublicProperties } from '../privacy/mac.js';
 
 export const layers = Router();
 
@@ -22,9 +24,9 @@ function featureFromRow(r) {
   return {
     type: 'Feature',
     geometry: { type: 'Point', coordinates: [r.lng, r.lat] },
-    properties: {
+    properties: scrubPublicProperties({
       id: r.source_id,
-      title: r.title,
+      title: redactMacInText(r.title),
       owner: r.owner_name,
       territory: r.territory,
       status: r.status,
@@ -36,7 +38,7 @@ function featureFromRow(r) {
       pincode: r.pincode || extra.pincode || null,
       ...(accountName ? { accountName } : {}),
       ...(accountCrmUrl ? { accountCrmUrl } : {}),
-    },
+    }),
   };
 }
 
@@ -63,6 +65,9 @@ layers.get('/:layer/feature/:id', async (req, res) => {
     const id = String(req.params.id || '').trim();
     if (!id) return res.status(400).json({ error: 'id required' });
 
+    const vis = layerVisibilityClauses(layer, 'p');
+    const visSql = vis.length ? `AND ${vis.join(' AND ')}` : '';
+
     const { rows } = await q(`
       SELECT ${POINT_SELECT_P},
              acc.title AS account_title,
@@ -70,6 +75,7 @@ layers.get('/:layer/feature/:id', async (req, res) => {
       FROM map_points p
       ${ACCOUNT_JOIN}
       WHERE p.layer = $1 AND p.source_id = $2 AND p.geom IS NOT NULL
+        ${visSql}
       LIMIT 1`, [layer, id]);
 
     if (!rows.length) return res.status(404).json({ error: 'point not found or unplottable' });

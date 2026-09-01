@@ -5,12 +5,7 @@ import { resolveBasemapStyle } from '../lib/basemap';
 
 maplibregl.setWorkerUrl('/maplibre-worker.js');
 
-const PLAN_COLOR = '#2F7A95';
-const CAND_COLOR = '#8A8494';
-const NEAR_COLOR = '#C45C26';
 const ROAD_COLOR = '#2F6B4F';
-const START_COLOR = '#2F6B4F';
-const END_COLOR = '#2E1F40';
 const FALLBACK_STYLE = 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
 
 /**
@@ -20,7 +15,9 @@ export default function RouteMap({
   planStops = [],
   candidates = [],
   nearby = [],
+  origin = null,
   routeCoords = [],
+  roadPath = false,
   selectedId,
   onSelectStop,
   className = '',
@@ -29,8 +26,12 @@ export default function RouteMap({
   const mapRef = useRef(null);
   const readyRef = useRef(false);
   const markersRef = useRef([]);
-  const propsRef = useRef({ planStops, candidates, nearby, routeCoords, selectedId, onSelectStop });
-  propsRef.current = { planStops, candidates, nearby, routeCoords, selectedId, onSelectStop };
+  const propsRef = useRef({
+    planStops, candidates, nearby, origin, routeCoords, roadPath, selectedId, onSelectStop,
+  });
+  propsRef.current = {
+    planStops, candidates, nearby, origin, routeCoords, roadPath, selectedId, onSelectStop,
+  };
   const fitKeyRef = useRef('');
 
   useEffect(() => {
@@ -60,7 +61,12 @@ export default function RouteMap({
         type: 'line',
         source: 'route-line',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': ROAD_COLOR, 'line-width': 5, 'line-opacity': 0.92 },
+        paint: {
+          'line-color': ROAD_COLOR,
+          'line-width': 5,
+          'line-opacity': 0.92,
+          'line-dasharray': [1, 0],
+        },
       });
     };
 
@@ -126,12 +132,28 @@ export default function RouteMap({
     const map = mapRef.current;
     if (!map || !readyRef.current) return;
     applyRouteData(map, markersRef, propsRef, fitKeyRef, true);
-  }, [planStops, candidates, nearby, routeCoords]);
+  }, [planStops, candidates, nearby, origin, routeCoords, roadPath]);
 
   useEffect(() => {
     for (const m of markersRef.current) {
       m.el.classList.toggle('is-selected', m.id === selectedId);
     }
+    const map = mapRef.current;
+    if (!map || !selectedId) return;
+    const {
+      planStops: plan, candidates: cand, nearby: near, origin: orig,
+    } = propsRef.current;
+    const stop = [...(plan || []), ...(cand || []), ...(near || [])]
+      .find((s) => s.id === selectedId);
+    const lngLat = stop && Number.isFinite(Number(stop.lng))
+      ? [Number(stop.lng), Number(stop.lat)]
+      : (orig && selectedId === 'origin' ? [Number(orig.lng), Number(orig.lat)] : null);
+    if (!lngLat) return;
+    try {
+      if (!map.getBounds()?.contains(lngLat)) {
+        map.easeTo({ center: lngLat, duration: 320 });
+      }
+    } catch { /* */ }
   }, [selectedId]);
 
   return (
@@ -157,10 +179,15 @@ function emptyFC() {
 
 function applyRouteData(map, markersRef, propsRef, fitKeyRef, refit = true) {
   const {
-    planStops, candidates, nearby, routeCoords, selectedId, onSelectStop,
+    planStops, candidates, nearby, origin, routeCoords, roadPath, selectedId, onSelectStop,
   } = propsRef.current;
   const lineSrc = map.getSource('route-line');
   if (!lineSrc) return;
+  try {
+    if (roadPath) map.setPaintProperty('route-line', 'line-dasharray', undefined);
+    else map.setPaintProperty('route-line', 'line-dasharray', [1.6, 1.4]);
+    map.setPaintProperty('route-line', 'line-opacity', roadPath ? 0.92 : 0.55);
+  } catch { /* */ }
 
   const coords = (routeCoords || []).filter(
     (c) => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1]),
@@ -175,7 +202,6 @@ function applyRouteData(map, markersRef, propsRef, fitKeyRef, refit = true) {
       }],
     });
   } else if ((planStops || []).length >= 2) {
-    // Dashed straight connectors when not yet optimized
     const line = planStops
       .filter((s) => Number.isFinite(s.lat) && Number.isFinite(s.lng))
       .map((s) => [s.lng, s.lat]);
@@ -191,8 +217,23 @@ function applyRouteData(map, markersRef, propsRef, fitKeyRef, refit = true) {
 
   clearMarkers(markersRef);
   const planIds = new Set((planStops || []).map((s) => s.id));
+  const originIsStop = origin && (planStops || []).some(
+    (s) => Number.isFinite(s.lat)
+      && Math.abs(s.lat - origin.lat) < 0.0008
+      && Math.abs(s.lng - origin.lng) < 0.0008,
+  );
+  if (origin && Number.isFinite(Number(origin.lat)) && !originIsStop) {
+    addMarker(map, markersRef, {
+      id: 'origin',
+      lngLat: [Number(origin.lng), Number(origin.lat)],
+      kind: 'origin',
+      label: '',
+      title: origin.label || 'Start',
+      selected: selectedId === 'origin',
+      onSelect: onSelectStop,
+    });
+  }
 
-  // Candidates not in plan — muted dots
   for (const s of candidates || []) {
     if (!Number.isFinite(s.lat) || !Number.isFinite(s.lng)) continue;
     if (planIds.has(s.id)) continue;
@@ -207,7 +248,6 @@ function applyRouteData(map, markersRef, propsRef, fitKeyRef, refit = true) {
     });
   }
 
-  // Nearby drop-ins not in plan
   for (const s of nearby || []) {
     if (!Number.isFinite(s.lat) || !Number.isFinite(s.lng)) continue;
     if (planIds.has(s.id)) continue;
@@ -222,7 +262,6 @@ function applyRouteData(map, markersRef, propsRef, fitKeyRef, refit = true) {
     });
   }
 
-  // Plan pins numbered
   (planStops || []).forEach((s, idx) => {
     if (!Number.isFinite(s.lat) || !Number.isFinite(s.lng)) return;
     const role = idx === 0 ? 'start' : (idx === planStops.length - 1 && planStops.length > 1 ? 'end' : 'plan');
@@ -240,6 +279,8 @@ function applyRouteData(map, markersRef, propsRef, fitKeyRef, refit = true) {
   if (!refit) return;
   const key = [
     ...(planStops || []).map((s) => s.id),
+    origin?.lat,
+    origin?.lng,
     coords.length,
   ].join('|');
   if (fitKeyRef.current === key) return;
@@ -248,6 +289,10 @@ function applyRouteData(map, markersRef, propsRef, fitKeyRef, refit = true) {
   const bounds = new maplibregl.LngLatBounds();
   let n = 0;
   for (const c of coords) { bounds.extend(c); n++; }
+  if (origin && Number.isFinite(Number(origin.lat))) {
+    bounds.extend([Number(origin.lng), Number(origin.lat)]);
+    n++;
+  }
   for (const s of planStops || []) {
     if (Number.isFinite(s.lat) && Number.isFinite(s.lng)) {
       bounds.extend([s.lng, s.lat]);
@@ -283,8 +328,10 @@ function addMarker(map, markersRef, {
   el.setAttribute('aria-label', title || id);
   el.title = title || '';
 
-  if (kind === 'candidate' || kind === 'nearby') {
-    el.innerHTML = `<span class="route-pin-dot"></span>`;
+  if (kind === 'origin') {
+    el.innerHTML = '<span class="route-pin-origin">S</span>';
+  } else if (kind === 'candidate' || kind === 'nearby') {
+    el.innerHTML = '<span class="route-pin-dot"></span>';
   } else {
     el.innerHTML = `
       <span class="route-pin-body">
@@ -303,7 +350,7 @@ function addMarker(map, markersRef, {
 
   const marker = new maplibregl.Marker({
     element: el,
-    anchor: kind === 'candidate' || kind === 'nearby' ? 'center' : 'bottom',
+    anchor: kind === 'candidate' || kind === 'nearby' || kind === 'origin' ? 'center' : 'bottom',
   }).setLngLat(lngLat).addTo(map);
 
   markersRef.current.push({ id, marker, el });

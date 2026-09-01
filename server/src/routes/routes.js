@@ -62,6 +62,7 @@ routes.post('/optimize', async (req, res) => {
       origin: body.origin || null,
       stops,
       departureTime: body.departureTime || null,
+      lockOrder: Boolean(body.lockOrder),
     });
     res.json(result);
   } catch (e) {

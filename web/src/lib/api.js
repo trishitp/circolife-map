@@ -241,6 +241,9 @@ export const shareRoutePlan = (owner, date, body) =>
 export const fetchSharedRoute = (token) =>
   jfetch(`/api/routes/share/${encodeURIComponent(token)}`);
 
+/** Google Maps dir URLs allow 9 waypoints besides origin and destination. */
+const GMAPS_MAX_WAYPOINTS = 9;
+
 /** Multi-stop or single-destination Google Maps navigation URL. */
 export function googleMapsNavUrl(stops, origin) {
   const pts = (stops || []).filter(
@@ -254,9 +257,9 @@ export function googleMapsNavUrl(stops, origin) {
     ? `${origin.lat},${origin.lng}`
     : `${pts[0].lat},${pts[0].lng}`;
   const dest = pts[pts.length - 1];
-  const waypoints = pts.slice(0, -1)
-    .map((s) => `${s.lat},${s.lng}`)
-    .join('|');
+  let mids = pts.slice(0, -1);
+  if (mids.length > GMAPS_MAX_WAYPOINTS) mids = mids.slice(0, GMAPS_MAX_WAYPOINTS);
+  const waypoints = mids.map((s) => `${s.lat},${s.lng}`).join('|');
   const u = new URL('https://www.google.com/maps/dir/');
   u.searchParams.set('api', '1');
   u.searchParams.set('origin', originStr);
@@ -264,6 +267,13 @@ export function googleMapsNavUrl(stops, origin) {
   if (waypoints) u.searchParams.set('waypoints', waypoints);
   u.searchParams.set('travelmode', 'driving');
   return u.toString();
+}
+
+export function googleMapsNavTruncated(stops) {
+  const n = (stops || []).filter(
+    (s) => Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng)),
+  ).length;
+  return n > GMAPS_MAX_WAYPOINTS + 1;
 }
 
 export function googleMapsStopUrl(stop) {

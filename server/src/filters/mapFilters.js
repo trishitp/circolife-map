@@ -1,3 +1,5 @@
+import { applyLayerVisibility } from './layerPolicy.js';
+
 /** Canonical territory filter groups (UI shows these 7 only). */
 export const TERRITORY_GROUPS = {
   Mumbai: {
@@ -171,6 +173,8 @@ export function buildMapFilterClauses(query, params, { layer } = {}) {
       wheres.push(`COALESCE((extra->>'joint')::boolean, false) = false`);
     }
   }
+
+  applyLayerVisibility(wheres, layer);
 
   return wheres;
 }

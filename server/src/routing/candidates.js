@@ -2,6 +2,8 @@
 import { q } from '../db.js';
 import { dayBoundsIST, haversineKm } from '../activity/metrics.js';
 import { parseList, sqlTerritoryGroups } from '../filters/mapFilters.js';
+import { sqlLayersVisibility } from '../filters/layerPolicy.js';
+import { redactMacInText } from '../privacy/mac.js';
 
 /** Precisions allowed for auto plan / optimize (not weak centroids). */
 export const PLAN_OK = new Set(['exact', 'geocoded', 'approx']);
@@ -29,7 +31,7 @@ function rowToStop(row, layer, opts = {}) {
     id: `${layer}:${row.source_id}`,
     layer,
     sourceId: row.source_id,
-    title: row.title || 'Stop',
+    title: redactMacInText(row.title) || 'Stop',
     owner: row.owner_name || null,
     territory: row.territory || null,
     status: row.status || null,
@@ -90,24 +92,27 @@ export async function loadDayMeetings({ owner, date, territory }) {
   );
   const prevRow = prev.rows[0];
 
-  let origin = null;
+  const originOptions = [];
+  if (prevRow) {
+    originOptions.push({
+      lat: Number(prevRow.lat),
+      lng: Number(prevRow.lng),
+      label: `Last check-in: ${prevRow.title || 'previous stop'}`,
+      source: 'previous_day',
+    });
+  }
   if (mapped[0]) {
-    origin = {
+    originOptions.push({
       lat: mapped[0].lat,
       lng: mapped[0].lng,
       label: `First meeting: ${mapped[0].title}`,
       source: 'first_meeting',
-    };
-  } else if (prevRow) {
-    origin = {
-      lat: Number(prevRow.lat),
-      lng: Number(prevRow.lng),
-      label: `Previous stop: ${prevRow.title || 'check-in'}`,
-      source: 'previous_day',
-    };
+    });
   }
+  // Prefer last known location so drive time to the first meeting is included.
+  const origin = originOptions[0] || null;
 
-  return { meetings: mapped, unmapped, origin, date, owner, timezone: 'Asia/Kolkata' };
+  return { meetings: mapped, unmapped, origin, originOptions, date, owner, timezone: 'Asia/Kolkata' };
 }
 
 /**
@@ -156,6 +161,7 @@ export async function loadNearby({
        AND precision IN ('exact','geocoded','approx')
        AND lat BETWEEN $2 AND $3
        AND lng BETWEEN $4 AND $5
+       AND ${sqlLayersVisibility()}
        ${ownerClause}
        ${extraSql}
      LIMIT 400`,
@@ -189,8 +195,8 @@ export async function loadCandidates({
 }) {
   const day = await loadDayMeetings({ owner, date, territory });
   let nearby = { stops: [], count: 0 };
-  const lat = nearLat != null ? Number(nearLat) : day.origin?.lat;
-  const lng = nearLng != null ? Number(nearLng) : day.origin?.lng;
+  const lat = nearLat != null ? Number(nearLat) : (day.meetings[0]?.lat ?? day.origin?.lat);
+  const lng = nearLng != null ? Number(nearLng) : (day.meetings[0]?.lng ?? day.origin?.lng);
   if (Number.isFinite(lat) && Number.isFinite(lng)) {
     nearby = await loadNearby({
       lat, lng, radiusKm,
@@ -208,6 +214,7 @@ export async function loadCandidates({
     date,
     timezone: 'Asia/Kolkata',
     origin: day.origin,
+    originOptions: day.originOptions || [],
     meetings: day.meetings,
     unmapped: day.unmapped,
     nearby: nearby.stops,

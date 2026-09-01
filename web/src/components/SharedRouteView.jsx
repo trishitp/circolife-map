@@ -148,7 +148,9 @@ export default function SharedRouteView({ token }) {
           planStops={stops}
           candidates={[]}
           nearby={[]}
+          origin={origin}
           routeCoords={routeCoords}
+          roadPath={Boolean(plan?.polyline)}
           selectedId={selectedId}
           onSelectStop={setSelectedId}
         />

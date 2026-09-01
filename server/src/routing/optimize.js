@@ -28,6 +28,22 @@ function latLngObj(lat, lng) {
   return { location: { latLng: { latitude: Number(lat), longitude: Number(lng) } } };
 }
 
+function samePoint(a, b, km = 0.08) {
+  if (!a || !b) return false;
+  if (!Number.isFinite(Number(a.lat)) || !Number.isFinite(Number(b.lat))) return false;
+  return haversineKm(Number(a.lat), Number(a.lng), Number(b.lat), Number(b.lng)) < km;
+}
+
+function zeroLeg(toId) {
+  return {
+    fromId: 'origin',
+    toId,
+    km: 0,
+    minutes: 0,
+    polyline: null,
+  };
+}
+
 /** Google requires departureTime in the future for TRAFFIC_AWARE routing. */
 function futureDepartureIso(inputTime) {
   const min = Date.now() + 90_000;
@@ -109,7 +125,89 @@ export function decodePolyline(encoded) {
 }
 
 /**
+ * Split origin vs stops so we never send the start point twice.
+ * Shortest-drive uses a round-trip (dest = origin) so the last stop can move, then drops the return leg.
+ */
+function routingPlan(origin, stops, lockOrder) {
+  const startedAtFirst = samePoint(origin, stops[0]);
+  const routeOrigin = startedAtFirst
+    ? { ...origin, lat: stops[0].lat, lng: stops[0].lng }
+    : origin;
+  const movable = startedAtFirst ? stops.slice(1) : stops;
+  if (lockOrder) {
+    if (!movable.length) {
+      return {
+        routeOrigin, startedAtFirst, movable, intermediates: [], destination: routeOrigin, roundTrip: false,
+      };
+    }
+    return {
+      routeOrigin,
+      startedAtFirst,
+      movable,
+      intermediates: movable.slice(0, -1),
+      destination: movable[movable.length - 1],
+      roundTrip: false,
+    };
+  }
+  return {
+    routeOrigin,
+    startedAtFirst,
+    movable,
+    intermediates: movable,
+    destination: routeOrigin,
+    roundTrip: movable.length >= 1,
+  };
+}
+
+function mapGoogleLegs(routeLegs, orderedStops, parseLeg) {
+  const legs = [];
+  for (let i = 0; i < routeLegs.length; i++) {
+    const parsed = parseLeg(routeLegs[i], i);
+    legs.push({
+      fromId: i === 0 ? 'origin' : orderedStops[i - 1]?.id,
+      toId: orderedStops[i]?.id,
+      ...parsed,
+    });
+  }
+  return legs;
+}
+
+function finishOptimized({
+  origin, stops, plan, useOptimize, orderIdx, rawLegs, encoded, provider, departureIso, parseLeg,
+}) {
+  let orderedMovable;
+  if (useOptimize && plan.movable.length && orderIdx?.length) {
+    orderedMovable = orderIdx.map((i) => plan.movable[i]).filter(Boolean);
+    if (orderedMovable.length !== plan.movable.length) {
+      orderedMovable = [...plan.movable];
+    }
+  } else {
+    orderedMovable = [...plan.movable];
+  }
+  const orderedStops = plan.startedAtFirst
+    ? [stops[0], ...orderedMovable]
+    : orderedMovable;
+
+  let routeLegs = rawLegs || [];
+  if (plan.roundTrip && routeLegs.length > orderedMovable.length) {
+    routeLegs = routeLegs.slice(0, orderedMovable.length);
+  }
+
+  let legs = mapGoogleLegs(routeLegs, plan.startedAtFirst ? orderedMovable : orderedStops, parseLeg);
+  if (plan.startedAtFirst) {
+    legs = [zeroLeg(orderedStops[0]?.id), ...legs];
+  }
+
+  if (!legs.length && orderedStops.length) {
+    legs = [zeroLeg(orderedStops[0].id)];
+  }
+
+  return buildResult(origin, orderedStops, legs, encoded, provider, departureIso);
+}
+
+/**
  * Optimize stop order and return road geometry + leg metrics.
+ * lockOrder: keep the given sequence (meeting times) and only fetch the road path.
  */
 export async function optimizeRoute(input) {
   if (!cfg.googleKey) {
@@ -130,61 +228,41 @@ export async function optimizeRoute(input) {
   const origin = input.origin && Number.isFinite(Number(input.origin.lat))
     ? input.origin
     : { lat: stops[0].lat, lng: stops[0].lng, label: 'Start' };
+  const lockOrder = Boolean(input.lockOrder);
+  const departureIso = futureDepartureIso(input.departureTime);
+  const plan = routingPlan(origin, stops, lockOrder);
 
-  if (stops.length === 1) {
+  if (stops.length === 1 && plan.startedAtFirst) {
     const only = { ...stops[0], order: 1 };
-    const legKm = haversineKm(origin.lat, origin.lng, only.lat, only.lng);
-    const coords = [[Number(origin.lng), Number(origin.lat)], [only.lng, only.lat]];
-    return {
-      origin,
-      stops: [only],
-      legs: [{
-        fromId: 'origin',
-        toId: only.id,
-        km: Math.round(legKm * 1000) / 1000,
-        minutes: Math.round((legKm / 25) * 60),
-        polyline: null,
-      }],
-      polyline: null,
-      routeCoords: coords,
-      totals: {
-        km: Math.round(legKm * 1000) / 1000,
-        minutes: Math.round((legKm / 25) * 60),
-        stops: 1,
-      },
-      provider: 'direct',
-    };
+    return buildResult(origin, [only], [zeroLeg(only.id)], null, 'direct', departureIso);
   }
 
-  const useOptimize = stops.length >= 2 && stops.length <= 25;
-  const intermediates = stops.slice(0, -1);
-  const destination = stops[stops.length - 1];
-  const departureIso = futureDepartureIso(input.departureTime);
+  const useOptimize = !lockOrder && plan.movable.length >= 2 && plan.movable.length <= 25;
 
   const routesResult = await tryRoutesApi({
-    origin, stops, intermediates, destination, useOptimize, departureIso,
+    origin, stops, plan, useOptimize, departureIso,
   });
   if (routesResult) return routesResult;
 
   const dirsResult = await tryDirectionsApi({
-    origin, stops, intermediates, destination, useOptimize, departureIso,
+    origin, stops, plan, useOptimize, departureIso,
   });
   if (dirsResult) return dirsResult;
 
-  return fallbackOptimize(origin, stops, 'Google Routes and Directions unavailable');
+  return fallbackOptimize(origin, stops, lockOrder, 'Google Routes and Directions unavailable');
 }
 
-async function tryRoutesApi({ origin, intermediates, destination, useOptimize, departureIso }) {
+async function tryRoutesApi({ origin, stops, plan, useOptimize, departureIso }) {
   const body = {
-    origin: latLngObj(origin.lat, origin.lng),
-    destination: latLngObj(destination.lat, destination.lng),
-    intermediates: intermediates.map((s) => latLngObj(s.lat, s.lng)),
+    origin: latLngObj(plan.routeOrigin.lat, plan.routeOrigin.lng),
+    destination: latLngObj(plan.destination.lat, plan.destination.lng),
+    intermediates: plan.intermediates.map((s) => latLngObj(s.lat, s.lng)),
     travelMode: 'DRIVE',
     routingPreference: 'TRAFFIC_AWARE',
     computeAlternativeRoutes: false,
     languageCode: 'en-IN',
     units: 'METRIC',
-    optimizeWaypointOrder: useOptimize && intermediates.length >= 1,
+    optimizeWaypointOrder: useOptimize && plan.intermediates.length >= 1,
     departureTime: departureIso,
   };
 
@@ -205,7 +283,7 @@ async function tryRoutesApi({ origin, intermediates, destination, useOptimize, d
       provider: 'google',
       units: 1,
       ok: r.ok,
-      meta: { status: r.status, stops: intermediates.length + 1 },
+      meta: { status: r.status, stops: stops.length, lockOrder: !useOptimize },
     });
     if (!r.ok) {
       const msg = j?.error?.message || j?.message || `Google Routes ${r.status}`;
@@ -223,67 +301,37 @@ async function tryRoutesApi({ origin, intermediates, destination, useOptimize, d
     return null;
   }
 
-  let orderedStops;
-  if (useOptimize && intermediates.length && route.optimizedIntermediateWaypointIndex?.length) {
-    const orderIdx = route.optimizedIntermediateWaypointIndex;
-    orderedStops = [
-      ...orderIdx.map((i) => intermediates[i]),
-      destination,
-    ];
-  } else {
-    orderedStops = [...intermediates, destination];
-  }
-
-  const legs = [];
-  const routeLegs = route.legs || [];
-  for (let i = 0; i < routeLegs.length; i++) {
-    const L = routeLegs[i];
-    const meters = Number(L.distanceMeters) || 0;
-    const sec = parseDurationSec(L.duration) || 0;
-    legs.push({
-      fromId: i === 0 ? 'origin' : orderedStops[i - 1]?.id,
-      toId: orderedStops[i]?.id,
-      km: Math.round((meters / 1000) * 1000) / 1000,
-      minutes: Math.round(sec / 60),
-      polyline: L.polyline?.encodedPolyline || null,
-    });
-  }
-
-  if (!legs.length && Number(route.distanceMeters)) {
-    const meters = Number(route.distanceMeters);
-    const sec = parseDurationSec(route.duration) || 0;
-    legs.push({
-      fromId: 'origin',
-      toId: orderedStops[0]?.id,
-      km: Math.round((meters / 1000) * 1000) / 1000,
-      minutes: Math.round(sec / 60),
-      polyline: null,
-    });
-  }
-
-  return buildResult(
+  return finishOptimized({
     origin,
-    orderedStops,
-    legs,
-    route.polyline?.encodedPolyline || null,
-    'google_routes',
+    stops,
+    plan,
+    useOptimize,
+    orderIdx: route.optimizedIntermediateWaypointIndex,
+    rawLegs: route.legs || [],
+    encoded: route.polyline?.encodedPolyline || null,
+    provider: 'google_routes',
     departureIso,
-  );
+    parseLeg: (L) => ({
+      km: Math.round(((Number(L.distanceMeters) || 0) / 1000) * 1000) / 1000,
+      minutes: Math.round((parseDurationSec(L.duration) || 0) / 60),
+      polyline: L.polyline?.encodedPolyline || null,
+    }),
+  });
 }
 
-async function tryDirectionsApi({ origin, intermediates, destination, useOptimize, departureIso }) {
+async function tryDirectionsApi({ origin, stops, plan, useOptimize, departureIso }) {
   try {
     const params = new URLSearchParams({
-      origin: `${Number(origin.lat)},${Number(origin.lng)}`,
-      destination: `${Number(destination.lat)},${Number(destination.lng)}`,
+      origin: `${Number(plan.routeOrigin.lat)},${Number(plan.routeOrigin.lng)}`,
+      destination: `${Number(plan.destination.lat)},${Number(plan.destination.lng)}`,
       mode: 'driving',
       language: 'en-IN',
       units: 'metric',
       departure_time: String(Math.floor(new Date(departureIso).getTime() / 1000)),
       key: cfg.googleKey,
     });
-    if (intermediates.length) {
-      const pts = intermediates.map((s) => `${Number(s.lat)},${Number(s.lng)}`).join('|');
+    if (plan.intermediates.length) {
+      const pts = plan.intermediates.map((s) => `${Number(s.lat)},${Number(s.lng)}`).join('|');
       params.set('waypoints', useOptimize ? `optimize:true|${pts}` : pts);
     }
     const r = await fetch(`${DIRECTIONS_URL}?${params}`);
@@ -302,60 +350,53 @@ async function tryDirectionsApi({ origin, intermediates, destination, useOptimiz
     }
 
     const route = j.routes[0];
-    let orderedStops;
-    if (useOptimize && intermediates.length && Array.isArray(route.waypoint_order)) {
-      orderedStops = [
-        ...route.waypoint_order.map((i) => intermediates[i]),
-        destination,
-      ];
-    } else {
-      orderedStops = [...intermediates, destination];
-    }
-
-    const legs = (route.legs || []).map((L, i) => ({
-      fromId: i === 0 ? 'origin' : orderedStops[i - 1]?.id,
-      toId: orderedStops[i]?.id,
-      km: Math.round(((L.distance?.value || 0) / 1000) * 1000) / 1000,
-      minutes: Math.round((L.duration_in_traffic?.value || L.duration?.value || 0) / 60),
-      polyline: L.overview_polyline?.points || null,
-    }));
-
-    return buildResult(
+    return finishOptimized({
       origin,
-      orderedStops,
-      legs,
-      route.overview_polyline?.points || null,
-      'google_directions',
+      stops,
+      plan,
+      useOptimize,
+      orderIdx: route.waypoint_order,
+      rawLegs: route.legs || [],
+      encoded: route.overview_polyline?.points || null,
+      provider: 'google_directions',
       departureIso,
-    );
+      parseLeg: (L) => ({
+        km: Math.round(((L.distance?.value || 0) / 1000) * 1000) / 1000,
+        minutes: Math.round((L.duration_in_traffic?.value || L.duration?.value || 0) / 60),
+        polyline: L.overview_polyline?.points || null,
+      }),
+    });
   } catch (e) {
     console.warn('[optimize] Google Directions fetch failed:', e.message);
     return null;
   }
 }
 
-function fallbackOptimize(origin, stops, reason) {
-  const remaining = [...stops];
-  const ordered = [];
-  let cur = { lat: origin.lat, lng: origin.lng };
-  while (remaining.length) {
-    let bestI = 0;
-    let bestD = Infinity;
-    for (let i = 0; i < remaining.length; i++) {
-      const d = haversineKm(cur.lat, cur.lng, remaining[i].lat, remaining[i].lng);
-      if (d < bestD) { bestD = d; bestI = i; }
+function fallbackOptimize(origin, stops, lockOrder, reason) {
+  let ordered;
+  if (lockOrder) {
+    ordered = [...stops];
+  } else {
+    const remaining = [...stops];
+    ordered = [];
+    let cur = { lat: origin.lat, lng: origin.lng };
+    while (remaining.length) {
+      let bestI = 0;
+      let bestD = Infinity;
+      for (let i = 0; i < remaining.length; i++) {
+        const d = haversineKm(cur.lat, cur.lng, remaining[i].lat, remaining[i].lng);
+        if (d < bestD) { bestD = d; bestI = i; }
+      }
+      const [next] = remaining.splice(bestI, 1);
+      ordered.push(next);
+      cur = next;
     }
-    const [next] = remaining.splice(bestI, 1);
-    ordered.push(next);
-    cur = next;
   }
 
   const legs = [];
   let prev = origin;
-  let totalKm = 0;
   ordered.forEach((s, i) => {
     const km = haversineKm(prev.lat, prev.lng, s.lat, s.lng);
-    totalKm += km;
     legs.push({
       fromId: i === 0 ? 'origin' : ordered[i - 1].id,
       toId: s.id,
@@ -366,25 +407,17 @@ function fallbackOptimize(origin, stops, reason) {
     prev = s;
   });
 
-  const withOrder = ordered.map((s, i) => ({ ...s, order: i + 1 }));
-  const routeCoords = [
-    [Number(origin.lng), Number(origin.lat)],
-    ...withOrder.map((s) => [s.lng, s.lat]),
-  ];
-  return {
+  return buildResult(
     origin,
-    stops: withOrder,
+    ordered,
     legs,
-    polyline: null,
-    routeCoords,
-    totals: {
-      km: Math.round(totalKm * 1000) / 1000,
-      minutes: legs.reduce((a, l) => a + (l.minutes || 0), 0),
-      stops: withOrder.length,
+    null,
+    'fallback_nn',
+    futureDepartureIso(null),
+    {
+      warning: reason
+        ? `Google Routes unavailable (${reason}) — used straight-line ${lockOrder ? 'order' : 'nearest-neighbour'}`
+        : 'Google Routes unavailable — used straight-line nearest-neighbour order',
     },
-    provider: 'fallback_nn',
-    warning: reason
-      ? `Google Routes unavailable (${reason}) — used straight-line nearest-neighbour`
-      : 'Google Routes unavailable — used straight-line nearest-neighbour order',
-  };
+  );
 }

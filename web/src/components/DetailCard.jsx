@@ -2,6 +2,38 @@ import { useEffect } from 'react';
 import { emitSelection } from '../lib/selection';
 import { IconAc } from './icons';
 
+const MAC_SEP = /\b(?:[0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}\b/g;
+const MAC_BARE = /\b[0-9A-Fa-f]{12}\b/g;
+const MAC_ONLY = /^(?:[0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{12}$/;
+
+function parseMacOctets(raw) {
+  const t = String(raw || '').trim();
+  const sep = t.match(/^([0-9A-Fa-f]{2})([:\-])(?:[0-9A-Fa-f]{2}\2){4}[0-9A-Fa-f]{2}$/);
+  if (sep) return t.split(sep[2]).map((o) => o.toUpperCase());
+  if (/^[0-9A-Fa-f]{12}$/.test(t)) {
+    const u = t.toUpperCase();
+    return [0, 2, 4, 6, 8, 10].map((i) => u.slice(i, i + 2));
+  }
+  return null;
+}
+
+function formatMaskedMac(raw) {
+  const octets = parseMacOctets(raw);
+  if (!octets) return raw;
+  return `${octets[0]}:${octets[1]}:••:••:••:${octets[5]}`;
+}
+
+function redactMac(value) {
+  if (value == null || value === '') return value;
+  const t = String(value).trim();
+  if (MAC_ONLY.test(t)) return formatMaskedMac(t);
+  return t
+    .replace(MAC_SEP, (m) => formatMaskedMac(m))
+    .replace(MAC_BARE, (m) => formatMaskedMac(m))
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 const PRECISION_COPY = {
   exact: 'Exact location',
   approx: 'Check-in (±1 km)',
@@ -51,7 +83,9 @@ export default function DetailCard({ p, onClose }) {
 
   const layer = p._layer;
   const isZone = layer === 'zone';
-  const assetNo = p.assetNumber || (layer === 'assets' ? p.title : null);
+  const assetNo = redactMac(p.assetNumber || (layer === 'assets' ? p.title : null));
+  const model = redactMac(p.assetName);
+  const mac = redactMac(p.mac);
   const rows = isZone ? [
     ['Kind', p.kind === 'untouched' ? 'Untouched' : p.kind === 'thin' ? 'Thin coverage' : 'Covered'],
     ['Leads', String(p.leads ?? 0)],
@@ -63,8 +97,8 @@ export default function DetailCard({ p, onClose }) {
       : 'Never in window'],
   ].filter(Boolean) : [
     layer === 'assets' && assetNo && ['Asset No', assetNo],
-    layer === 'assets' && p.assetName && p.assetName !== assetNo && ['Model', p.assetName],
-    layer === 'assets' && p.mac && ['MAC', p.mac],
+    layer === 'assets' && model && model !== assetNo && ['Model', model],
+    layer === 'assets' && mac && ['MAC', mac],
     layer === 'assets' && p.acType && ['AC type', p.acType],
     layer === 'assets' && p.tonnage && ['Tonnage', p.tonnage],
     p.address && ['Address', p.address],
@@ -95,7 +129,7 @@ export default function DetailCard({ p, onClose }) {
           {layer === 'assets' ? 'AC' : (LAYER_LABEL[layer] || layer)}
         </div>
       )}
-      <h3>{layer === 'assets' ? (assetNo || p.title || 'Asset') : (p.title || 'Untitled')}</h3>
+      <h3>{layer === 'assets' ? (assetNo || 'Asset') : (redactMac(p.title) || 'Untitled')}</h3>
       {rows.length > 0 && (
         <dl className="meta">
           {rows.map(([k, v]) => (

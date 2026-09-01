@@ -7,6 +7,7 @@ import { refreshTerritoryCentroids } from '../geocode/pipeline.js';
 import { rebuildDiscrepancies } from '../discrepancy/engine.js';
 import { exchangeAuthCode, getAccessToken, zohoAuthStatus } from '../zoho/analyticsClient.js';
 import { requireAdminWrite } from '../auth.js';
+import { redactMacInText } from '../privacy/mac.js';
 import { usageSummary, saveRates } from '../usage/meter.js';
 import {
   listAccounts, createAccount, updateAccount,
@@ -269,7 +270,7 @@ admin.get('/points/search', async (req, res) => {
   if (layer) { params.push(layer); sql += ` AND layer=$${params.length}`; }
   sql += ` ORDER BY updated_at DESC LIMIT 40`;
   const { rows } = await q(sql, params);
-  res.json(rows);
+  res.json(rows.map((r) => ({ ...r, title: redactMacInText(r.title) })));
 });
 
 admin.get('/usage', async (_req, res) => {
