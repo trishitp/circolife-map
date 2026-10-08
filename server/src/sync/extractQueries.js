@@ -99,29 +99,28 @@ SELECT m."Id" AS "Id", m."Title" AS "Title", m."Host Name" AS owner, m."From" AS
 FROM "Meetings" m`;
 
 // FSM workspace (ZOHO_FSM_WORKSPACE_ID) — Assets is not in CRM Analytics.
+// No table aliases: Zoho Analytics rejects short aliases like `s` (error 7427).
+// Parent/container exclusion is done in sync.js (NOT EXISTS correlated subqueries
+// are unreliable here).
 export const ASSETS_SQL = `
-SELECT CAST(s."Id" AS CHAR) AS "Id",
-       s."Asset Name" AS "Asset Name",
-       s."Asset Number" AS "Asset Number", s."mac id" AS mac,
-       s."AC Type" AS "AC Type", s."Tonnage" AS "Tonnage",
-       s."Asset Status" AS "Asset Status",
-       s."Installation Date" AS "Installation Date",
-       CAST(s."Company" AS CHAR) AS account_id,
-       CAST(s."Address" AS CHAR) AS address_id,
-       CAST(s."Parent Asset" AS CHAR) AS parent_asset_id,
-       s."Created Time" AS "Created Time", s."Modified Time" AS "Modified Time"
-FROM "Assets" s
-WHERE (s."Asset Status" IS NULL OR s."Asset Status" NOT IN ('Uninstalled'))
-  AND NOT EXISTS (
-    SELECT 1 FROM "Assets" child
-    WHERE CAST(child."Parent Asset" AS CHAR) = CAST(s."Id" AS CHAR)
-  )`;
+SELECT CAST("Id" AS CHAR) AS "Id",
+       "Asset Name" AS "Asset Name",
+       "Asset Number" AS "Asset Number", "mac id" AS mac,
+       "AC Type" AS "AC Type", "Tonnage" AS "Tonnage",
+       "Asset Status" AS "Asset Status",
+       "Installation Date" AS "Installation Date",
+       CAST("Company" AS CHAR) AS account_id,
+       CAST("Address" AS CHAR) AS address_id,
+       CAST("Parent Asset" AS CHAR) AS parent_asset_id,
+       "Created Time" AS "Created Time", "Modified Time" AS "Modified Time"
+FROM "Assets"
+WHERE ("Asset Status" IS NULL OR "Asset Status" NOT IN ('Uninstalled'))`;
 
-/** Distinct parent asset ids — used to purge container rows from the map on sync. FSM workspace. */
+/** Distinct parent asset ids — used to purge/skip container rows on sync. FSM workspace. */
 export const ASSET_PARENT_IDS_SQL = `
-SELECT DISTINCT CAST(child."Parent Asset" AS CHAR) AS parent_id
-FROM "Assets" child
-WHERE child."Parent Asset" IS NOT NULL`;
+SELECT DISTINCT CAST("Parent Asset" AS CHAR) AS parent_id
+FROM "Assets"
+WHERE "Parent Asset" IS NOT NULL`;
 
 // Shipping / billing for assets fallback when FSM Address is missing.
 // Joins converted Lead for Shipping Street/Code (Accounts.Billing Code is empty).

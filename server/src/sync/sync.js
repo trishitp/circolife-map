@@ -517,13 +517,16 @@ function resolveAssetTitle(r) {
 }
 
 async function syncAssets() {
-  // Purge parent/container rows still in the map from before the exclusion rule.
+  // Parent/container asset ids (appear as someone's Parent Asset) — skip on map.
+  const parentIdSet = new Set();
   try {
     const parentRows = csv(await exportSql(ASSET_PARENT_IDS_SQL, cfg.zoho.fsmWorkspaceId));
-    const parentIds = parentRows
-      .map((r) => normalizeZohoId(r.parent_id))
-      .filter(Boolean);
-    if (parentIds.length) {
+    for (const r of parentRows) {
+      const id = normalizeZohoId(r.parent_id);
+      if (id) parentIdSet.add(id);
+    }
+    if (parentIdSet.size) {
+      const parentIds = [...parentIdSet];
       const del = await q(
         `DELETE FROM map_points WHERE layer='assets' AND source_id = ANY($1::text[])`,
         [parentIds],
@@ -563,7 +566,7 @@ async function syncAssets() {
         billingAddressId: normalizeZohoId(r.billing_address_id),
       });
     }
-    console.log(`[assets] ${rows.length} rows, ${addrs.size} FSM addresses, ${fsmCompanies.size} FSM companies`);
+    console.log(`[assets] ${rows.length} rows, ${addrs.size} FSM addresses, ${fsmCompanies.size} FSM companies, ${parentIdSet.size} parents skipped`);
   } catch (e) {
     console.warn(`[assets] FSM_COMPANIES_SQL failed: ${e.message}`);
     console.log(`[assets] ${rows.length} rows, ${addrs.size} FSM addresses`);
@@ -641,6 +644,8 @@ async function syncAssets() {
   await Promise.all(rows.map((r) => limit(async () => {
     const sourceId = resolveAssetSourceId(r);
     if (!sourceId) return;
+    // Skip parent/container assets (children + standalone only on the map)
+    if (parentIdSet.has(sourceId)) return;
     seenIds.push(sourceId);
 
     const assetNumber = cleanText(col(r, 'Asset Number')) || null;
