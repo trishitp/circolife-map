@@ -98,6 +98,7 @@ SELECT m."Id" AS "Id", m."Title" AS "Title", m."Host Name" AS owner, m."From" AS
        m."Created Time" AS "Created Time", m."Modified Time" AS "Modified Time"
 FROM "Meetings" m`;
 
+// FSM workspace (ZOHO_FSM_WORKSPACE_ID) — Assets is not in CRM Analytics.
 export const ASSETS_SQL = `
 SELECT CAST(s."Id" AS CHAR) AS "Id",
        s."Asset Name" AS "Asset Name",
@@ -116,7 +117,7 @@ WHERE (s."Asset Status" IS NULL OR s."Asset Status" NOT IN ('Uninstalled'))
     WHERE CAST(child."Parent Asset" AS CHAR) = CAST(s."Id" AS CHAR)
   )`;
 
-/** Distinct parent asset ids — used to purge container rows from the map on sync. */
+/** Distinct parent asset ids — used to purge container rows from the map on sync. FSM workspace. */
 export const ASSET_PARENT_IDS_SQL = `
 SELECT DISTINCT CAST(child."Parent Asset" AS CHAR) AS parent_id
 FROM "Assets" child

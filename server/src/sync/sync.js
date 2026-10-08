@@ -519,7 +519,7 @@ function resolveAssetTitle(r) {
 async function syncAssets() {
   // Purge parent/container rows still in the map from before the exclusion rule.
   try {
-    const parentRows = csv(await exportSql(ASSET_PARENT_IDS_SQL));
+    const parentRows = csv(await exportSql(ASSET_PARENT_IDS_SQL, cfg.zoho.fsmWorkspaceId));
     const parentIds = parentRows
       .map((r) => normalizeZohoId(r.parent_id))
       .filter(Boolean);
@@ -540,7 +540,8 @@ async function syncAssets() {
     console.warn(`[assets] parent purge skipped: ${e.message}`);
   }
 
-  const rows = csv(await exportSql(ASSETS_SQL));
+  // Assets live in FSM Analytics (same workspace as Addresses / Companies)
+  const rows = csv(await exportSql(ASSETS_SQL, cfg.zoho.fsmWorkspaceId));
   const addrRows = csv(await exportSql(FSM_ADDRESSES_SQL, cfg.zoho.fsmWorkspaceId));
   const addrs = new Map();
   for (const a of addrRows) {
