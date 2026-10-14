@@ -160,6 +160,7 @@ export default function RoutePlanView({ options = {} }) {
   const [warning, setWarning] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [unmapped, setUnmapped] = useState([]);
+  const [nearbyMeta, setNearbyMeta] = useState(null);
   const stopRefs = useRef(new Map());
 
   const legByTo = useMemo(() => {
@@ -226,6 +227,7 @@ export default function RoutePlanView({ options = {} }) {
       setUnmapped(data.unmapped || []);
       setOriginOptions(data.originOptions || (data.origin ? [data.origin] : []));
       setNearby(data.nearby || []);
+      setNearbyMeta(data.nearbyMeta || null);
 
       let usedSaved = false;
       if (preferDraft) {
@@ -476,6 +478,10 @@ export default function RoutePlanView({ options = {} }) {
   };
 
   const exploreNearSelected = async (centerStop) => {
+    if (nearbyMeta?.mode === 'pincode') {
+      load({ preferDraft: false });
+      return;
+    }
     const stop = centerStop
       || planStops.find((s) => s.id === selectedId)
       || planStops[0]
@@ -502,6 +508,14 @@ export default function RoutePlanView({ options = {} }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const refreshNearbyList = () => {
+    if (nearbyMeta?.mode === 'pincode') {
+      load({ preferDraft: false });
+      return;
+    }
+    exploreNearSelected();
   };
 
   const onSelectOrigin = (sourceKey) => {
@@ -873,11 +887,21 @@ export default function RoutePlanView({ options = {} }) {
 
               <div className="soft-block route-plan-panel">
                 <div className="route-panel-head">
-                  <h2>Nearby drop-ins</h2>
-                  <button type="button" className="btn ghost sm" disabled={loading} onClick={() => exploreNearSelected()}>
+                  <h2>
+                    {nearbyMeta?.mode === 'pincode'
+                      ? 'Leads & accounts in assigned pincodes'
+                      : 'Nearby drop-ins'}
+                  </h2>
+                  <button type="button" className="btn ghost sm" disabled={loading} onClick={refreshNearbyList}>
                     {loading ? 'Finding…' : 'Refresh'}
                   </button>
                 </div>
+                {nearbyMeta?.mode === 'pincode' && (
+                  <p className="muted route-origin-hint">
+                    {nearbyMeta.pincodes?.length || 0} pincodes for {owner} — all owners in those pincodes.
+                    {nearbyMeta.limited ? ' List capped; narrow territory filters if needed.' : ''}
+                  </p>
+                )}
                 <div className="route-nearby-tools">
                   <input
                     className="input"
@@ -901,7 +925,11 @@ export default function RoutePlanView({ options = {} }) {
                   </div>
                 </div>
                 {!filteredNearby.length && (
-                  <p className="muted">No nearby leads or accounts. Select a stop, then Find nearby, or widen the radius.</p>
+                  <p className="muted">
+                    {nearbyMeta?.mode === 'pincode'
+                      ? 'No plannable leads or accounts in this RM’s assigned pincodes. Upload mapping in Admin or check territory filters.'
+                      : 'No nearby leads or accounts. Select a stop, then Find nearby, or widen the radius.'}
+                  </p>
                 )}
                 <ul className="route-nearby-list">
                   {filteredNearby.slice(0, 40).map((s) => (
@@ -909,7 +937,9 @@ export default function RoutePlanView({ options = {} }) {
                       <button type="button" className="route-nearby-hit" onClick={() => setSelectedId(s.id)}>
                         <strong>{s.title}</strong>
                         <span className="muted">
-                          {layerLabel(s.layer)} · {fmtKm(s.distanceKm)}
+                          {layerLabel(s.layer)}
+                          {s.distanceKm != null ? ` · ${fmtKm(s.distanceKm)}` : ''}
+                          {s.pincode ? ` · ${s.pincode}` : ''}
                           {s.precision === 'approx' ? ' · ~1 km' : ''}
                         </span>
                       </button>

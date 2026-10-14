@@ -4,6 +4,7 @@ import {
   clearFailedCache, clearAllCache, refreshTerritories, overridePoint,
   bulkOverride, searchPoints, fetchCacheSample, triggerRebuildDiscrepancies,
   fetchZohoStatus, refreshZohoToken, exchangeZohoCode, saveMapMarkerStyle,
+  uploadBdmPincodes,
 } from '../lib/api';
 import ApiCostPanel from './ApiCostPanel';
 import UsersAdmin from './UsersAdmin';
@@ -22,6 +23,8 @@ export default function AdminPanel({ me, markerStyle, onMarkerStyle }) {
   const [hits, setHits] = useState([]);
   const [override, setOverride] = useState({ layer: '', id: '', lat: '', lng: '', notes: '' });
   const [csv, setCsv] = useState('layer,source_id,lat,lng\n');
+  const [bdmCsv, setBdmCsv] = useState('bdm_name,pincode\n');
+  const [bdmUploading, setBdmUploading] = useState(false);
   const [cacheSample, setCacheSample] = useState(null);
   const [zoho, setZoho] = useState(null);
   const [authCode, setAuthCode] = useState('');
@@ -269,6 +272,89 @@ export default function AdminPanel({ me, markerStyle, onMarkerStyle }) {
               <span>Cache: {dash.cache.ok} ok / {dash.cache.failed} failed</span>
               <span>Pincodes: {dash.pincodeCentroids}</span>
               <span>Territories: {dash.territoryCentroids}</span>
+              {dash.bdmPincodeAssignments?.rows > 0 && (
+                <span>
+                  BDM map: {dash.bdmPincodeAssignments.bdms} agents ·{' '}
+                  {dash.bdmPincodeAssignments.rows} pincodes
+                </span>
+              )}
+            </div>
+          </section>
+
+          <section className="soft-block">
+            <h2>BDM pincode mapping</h2>
+            <p className="muted">
+              Upload Excel (.xlsx) or CSV with BDM/RM name and pincode columns. This replaces
+              all assignments and drives visit colours on the map plus route drop-ins.
+            </p>
+            <textarea
+              className="input textarea"
+              rows={5}
+              value={bdmCsv}
+              onChange={(e) => setBdmCsv(e.target.value)}
+              spellCheck={false}
+            />
+            <div className="btn-row">
+              <button
+                type="button"
+                className="btn"
+                disabled={bdmUploading}
+                onClick={async () => {
+                  setBdmUploading(true);
+                  setError(null);
+                  try {
+                    const r = await uploadBdmPincodes({ csv: bdmCsv });
+                    setMsg(`BDM pincodes: ${r.uploaded} rows · ${r.bdms} agents`);
+                    load();
+                  } catch (e) {
+                    setError(e.message);
+                  } finally {
+                    setBdmUploading(false);
+                  }
+                }}
+              >
+                {bdmUploading ? 'Uploading…' : 'Upload CSV'}
+              </button>
+              <label className="btn ghost file-btn">
+                Upload Excel
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  hidden
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = '';
+                    if (!file) return;
+                    setBdmUploading(true);
+                    setError(null);
+                    try {
+                      const name = file.name.toLowerCase();
+                      if (name.endsWith('.csv')) {
+                        const text = await file.text();
+                        const r = await uploadBdmPincodes({ csv: text });
+                        setMsg(`BDM pincodes: ${r.uploaded} rows · ${r.bdms} agents`);
+                      } else {
+                        const base64 = await new Promise((resolve, reject) => {
+                          const reader = new FileReader();
+                          reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+                          reader.onerror = reject;
+                          reader.readAsDataURL(file);
+                        });
+                        const r = await uploadBdmPincodes({
+                          base64,
+                          filename: file.name,
+                        });
+                        setMsg(`BDM pincodes: ${r.uploaded} rows · ${r.bdms} agents`);
+                      }
+                      load();
+                    } catch (err) {
+                      setError(err.message);
+                    } finally {
+                      setBdmUploading(false);
+                    }
+                  }}
+                />
+              </label>
             </div>
           </section>
 
@@ -284,8 +370,16 @@ export default function AdminPanel({ me, markerStyle, onMarkerStyle }) {
                 Re-sync assets (shipping fallback)
               </button>
               <button type="button" className="btn" disabled={job?.status === 'running'}
-                onClick={() => run('Re-geocode', () => triggerRegeocode({ clearFailed: true }))}>
-                Clear failed + re-geocode
+                onClick={() => run('Re-geocode', () => triggerRegeocode({ limit: 5000 }))}>
+                Re-geocode weak pins
+              </button>
+              <button type="button" className="btn ghost" disabled={job?.status === 'running'}
+                onClick={() => run('Re-geocode (retry failed)', () => triggerRegeocode({
+                  clearFailed: true,
+                  upgradePincodeRows: true,
+                  limit: 3000,
+                }))}>
+                Retry failed addresses
               </button>
               <button type="button" className="btn ghost" disabled={job?.status === 'running'}
                 onClick={() => run('Discrepancies', triggerRebuildDiscrepancies)}>

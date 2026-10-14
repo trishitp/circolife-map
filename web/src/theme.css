@@ -1082,6 +1082,25 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
 .legend-swatch.zone-covered { background: #6BB35A; border-radius: 3px; }
 .legend-swatch.heat-cool { background: #BDE0ED; }
 .legend-swatch.heat-hot { background: #c45c4a; }
+.legend-swatch.visit-in { background: #2563EB; }
+.legend-swatch.visit-out { background: #DC2626; }
+
+.map-record-total {
+  position: absolute;
+  top: 168px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--purple);
+  background: rgba(254, 249, 245, 0.94);
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 10px rgba(46, 31, 64, 0.08);
+  pointer-events: none;
+}
 
 .insight-dock {
   position: relative;
@@ -3909,6 +3928,7 @@ a.login-btn {
     max-width: min(880px, calc(100% - 32px));
   }
   .map-shell.has-issue .map-filter-chips { top: 64px; }
+  .map-record-total { top: 124px; font-size: 11px; max-width: calc(100% - 24px); text-align: center; }
   .map-status { top: 88px; }
   .map-shell.has-issue .map-status,
   .map-shell.has-filter-chips .map-status { top: 132px; }

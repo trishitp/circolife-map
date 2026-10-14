@@ -968,7 +968,11 @@ export async function runAssetsSync() {
 }
 
 /** Re-resolve points that are none/pincode and have usable street or pin. */
-export async function runRegeocode({ clearFailed = true, limitRows = 50000 } = {}) {
+export async function runRegeocode({
+  clearFailed = false,
+  limitRows = 5000,
+  upgradePincodeRows = false,
+} = {}) {
   const t = Date.now();
   if (clearFailed) {
     const del = await q(`DELETE FROM geocode_cache WHERE failed = TRUE`);
@@ -978,16 +982,17 @@ export async function runRegeocode({ clearFailed = true, limitRows = 50000 } = {
 
   const { rows } = await q(`
     SELECT layer, source_id, title, owner_name, territory, status, record_ts,
-           address_raw, pincode, crm_url, extra
+           address_raw, pincode, crm_url, extra, precision
     FROM map_points
     WHERE precision IN ('none', 'pincode', 'territory')
+      AND ($2::boolean OR precision <> 'pincode')
       AND (
         (address_raw IS NOT NULL AND length(trim(address_raw)) > 8)
         OR (pincode ~ '^[1-9][0-9]{5}$')
         OR (territory IS NOT NULL AND territory <> '')
       )
     ORDER BY CASE precision WHEN 'none' THEN 0 WHEN 'pincode' THEN 1 ELSE 2 END
-    LIMIT $1`, [limitRows]);
+    LIMIT $1`, [limitRows, upgradePincodeRows]);
 
   console.log(`[regeocode] ${rows.length} candidates`);
   let upgraded = 0;
@@ -1001,6 +1006,8 @@ export async function runRegeocode({ clearFailed = true, limitRows = 50000 } = {
       cityHint: r.territory,
       territory: r.territory,
       country: 'India',
+      geocodeStreet: r.precision === 'none' || r.precision === 'territory'
+        || (upgradePincodeRows && r.precision === 'pincode'),
     });
     const rank = { none: 0, territory: 1, pincode: 2, inherited: 3, approx: 4, geocoded: 5, exact: 6 };
     const cur = (await q(

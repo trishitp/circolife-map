@@ -113,6 +113,8 @@ export async function resolvePoint({
   sLat, sLng, checkinLatLng,
   street, street2, city, state, country,
   pincode, cityHint, territory,
+  /** When false, skip paid street geocode (pincode / territory only). */
+  geocodeStreet = true,
 }) {
   const pin = normalizePincode(pincode);
   const streetLine = composeStreet(street, street2);
@@ -129,7 +131,7 @@ export async function resolvePoint({
 
   // T1: street-level provider geocode on the FULL address
   // (pin-only rows skip to T2 — no API burn). Also refines Analytics 2dp coords.
-  if (streetLine) {
+  if (geocodeStreet && streetLine) {
     const query = buildFullAddress({
       street, street2, city, state, pincode: pin, country, territory, cityHint,
     });

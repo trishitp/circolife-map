@@ -128,8 +128,10 @@ export function buildMapFilterClauses(query, params, { layer } = {}) {
   };
 
   const owners = parseList(query.owner);
-  if (owners.length === 1) add(`owner_name = ?`, owners[0]);
-  else if (owners.length > 1) addAny(`owner_name = ANY(?::text[])`, owners);
+  // RM filter applies to their visits (meetings/assets), not area-wide leads/accounts.
+  const ownerScoped = layer !== 'leads' && layer !== 'accounts';
+  if (ownerScoped && owners.length === 1) add(`owner_name = ?`, owners[0]);
+  else if (ownerScoped && owners.length > 1) addAny(`owner_name = ANY(?::text[])`, owners);
 
   const terrSql = sqlTerritoryGroups(params, query.territory);
   if (terrSql) wheres.push(terrSql);

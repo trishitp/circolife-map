@@ -4,6 +4,7 @@ import { dayBoundsIST, haversineKm } from '../activity/metrics.js';
 import { parseList, sqlTerritoryGroups } from '../filters/mapFilters.js';
 import { sqlLayersVisibility } from '../filters/layerPolicy.js';
 import { redactMacInText } from '../privacy/mac.js';
+import { getPincodesForBdm } from '../bdmPincodes.js';
 
 /** Precisions allowed for auto plan / optimize (not weak centroids). */
 export const PLAN_OK = new Set(['exact', 'geocoded', 'approx']);
@@ -116,6 +117,53 @@ export async function loadDayMeetings({ owner, date, territory }) {
 }
 
 /**
+ * Plannable leads & accounts in BDM-assigned pincodes (all owners).
+ */
+export async function loadStopsInBdmPincodes({
+  owner, territory, source, layers = ['leads', 'accounts'], limit = 800,
+}) {
+  const pincodes = await getPincodesForBdm(owner);
+  if (!pincodes.length) return { stops: [], pincodes: [], limited: false };
+
+  const allowed = (Array.isArray(layers) ? layers : String(layers).split(','))
+    .map((s) => s.trim())
+    .filter((l) => l === 'leads' || l === 'accounts');
+  if (!allowed.length) allowed.push('leads', 'accounts');
+
+  const params = [allowed, pincodes];
+  const extra = [];
+  const terrSql = sqlTerritoryGroups(params, territory);
+  if (terrSql) extra.push(terrSql);
+  const sources = parseList(source);
+  if (sources.length) {
+    params.push(sources);
+    extra.push(`(layer <> 'leads' OR extra->>'source' = ANY($${params.length}::text[]))`);
+  }
+  const extraSql = extra.length ? ` AND ${extra.join(' AND ')}` : '';
+  const cap = Math.min(Math.max(Number(limit) || 800, 1), 2000);
+
+  const { rows } = await q(
+    `SELECT layer, source_id, title, owner_name, territory, status, record_ts,
+            lat, lng, precision, address_raw, pincode, crm_url, extra
+     FROM map_points
+     WHERE layer = ANY($1::text[])
+       AND pincode = ANY($2::text[])
+       AND lat IS NOT NULL AND lng IS NOT NULL
+       AND precision IN ('exact','geocoded','approx')
+       AND ${sqlLayersVisibility()}
+       ${extraSql}
+     ORDER BY layer ASC, title ASC NULLS LAST, source_id ASC
+     LIMIT ${cap + 1}`,
+    params,
+  );
+
+  const limited = rows.length > cap;
+  const slice = limited ? rows.slice(0, cap) : rows;
+  const stops = slice.map((r) => rowToStop(r, r.layer, { kind: 'territory' }));
+  return { stops, pincodes, limited };
+}
+
+/**
  * Nearby leads/accounts around a point (Explore nearest / drop-ins).
  */
 export async function loadNearby({
@@ -194,21 +242,49 @@ export async function loadCandidates({
   owner, date, territory, source, nearLat, nearLng, radiusKm = 3,
 }) {
   const day = await loadDayMeetings({ owner, date, territory });
-  let nearby = { stops: [], count: 0 };
-  const lat = nearLat != null ? Number(nearLat) : (day.meetings[0]?.lat ?? day.origin?.lat);
-  const lng = nearLng != null ? Number(nearLng) : (day.meetings[0]?.lng ?? day.origin?.lng);
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
-    nearby = await loadNearby({
-      lat, lng, radiusKm,
-      territory: territory || null,
-      source: source || null,
-      owner: null,
-      layers: ['leads', 'accounts'],
-    });
-    const meetIds = new Set(day.meetings.map((m) => m.sourceId));
-    nearby.stops = nearby.stops.filter((s) => !(s.layer === 'meetings' && meetIds.has(s.sourceId)));
-    nearby.count = nearby.stops.length;
+  const territoryStops = await loadStopsInBdmPincodes({
+    owner, territory, source, layers: ['leads', 'accounts'],
+  });
+  let nearbyStops = territoryStops.stops;
+  let nearbyMeta = {
+    mode: 'pincode',
+    pincodes: territoryStops.pincodes,
+    count: nearbyStops.length,
+    limited: territoryStops.limited,
+    radiusKm: null,
+    lat: null,
+    lng: null,
+  };
+
+  if (!territoryStops.pincodes.length) {
+    const lat = nearLat != null ? Number(nearLat) : (day.meetings[0]?.lat ?? day.origin?.lat);
+    const lng = nearLng != null ? Number(nearLng) : (day.meetings[0]?.lng ?? day.origin?.lng);
+    nearbyMeta = {
+      mode: 'radius',
+      pincodes: [],
+      lat,
+      lng,
+      radiusKm: Number(radiusKm) || 3,
+      count: 0,
+      limited: false,
+    };
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      const nearby = await loadNearby({
+        lat, lng, radiusKm,
+        territory: territory || null,
+        source: source || null,
+        owner: null,
+        layers: ['leads', 'accounts'],
+      });
+      nearbyStops = nearby.stops;
+      nearbyMeta.count = nearbyStops.length;
+    }
   }
+
+  const meetIds = new Set(day.meetings.map((m) => m.sourceId));
+  nearbyStops = nearbyStops.filter((s) => !(s.layer === 'meetings' && meetIds.has(s.sourceId)));
+  nearbyMeta.count = nearbyStops.length;
+
   return {
     owner,
     date,
@@ -217,7 +293,7 @@ export async function loadCandidates({
     originOptions: day.originOptions || [],
     meetings: day.meetings,
     unmapped: day.unmapped,
-    nearby: nearby.stops,
-    nearbyMeta: { lat, lng, radiusKm: Number(radiusKm) || 3, count: nearby.count },
+    nearby: nearbyStops,
+    nearbyMeta,
   };
 }

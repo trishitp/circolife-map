@@ -70,6 +70,8 @@ export default function ApiCostPanel() {
       <h2>API cost</h2>
       <p className="muted">
         Estimated spend from Maps API calls this app logs. This is not a Google Cloud invoice.
+        Most spend is usually geocoding — avoid “Retry failed addresses” unless you intend to pay
+        for another pass; failed lookups stay cached so sync does not re-bill them.
       </p>
       {error && <div className="banner err">{error}</div>}
       {msg && <div className="banner ok">{msg}</div>}

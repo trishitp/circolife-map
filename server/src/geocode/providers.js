@@ -11,22 +11,9 @@ import { recordUsage } from '../usage/meter.js';
  * @throws on auth / quota / network so caller can retry next sync without caching failure
  */
 export async function providerGeocode(query, opts = {}) {
-  // 1) Strict: bias/filter by postal_code when known
-  // 2) Soft retry: pin may be wrong in CRM — keep pin in address text only
-  const attempts = opts.pincode
-    ? [{ ...opts, strictPostal: true }, { ...opts, strictPostal: false }]
-    : [{ ...opts, strictPostal: false }];
-
-  let lastHardError = null;
-  for (const attempt of attempts) {
-    const hit = await geocodeOnce(query, attempt).catch((e) => {
-      lastHardError = e;
-      return null;
-    });
-    if (hit) return hit;
-  }
-  if (lastHardError) throw lastHardError;
-  return null;
+  // Single provider round-trip; postal validation happens on the result set
+  // (avoids strict-then-soft double billing on every miss).
+  return geocodeOnce(query, opts);
 }
 
 async function geocodeOnce(query, opts) {
@@ -47,7 +34,7 @@ async function geocodeOnce(query, opts) {
       // When we asked for a street address, reject city-level snaps — pincode tier is better.
       if (opts.requireStreetLevel && isCoarseConfidence(g.confidence)) continue;
       // Strict attempt: reject postal mismatch. Soft attempt: allow (street may be right, pin wrong).
-      if (opts.strictPostal) {
+      if (opts.pincode) {
         const want = normalizePincode(opts.pincode);
         const got = normalizePincode(g.postalCode);
         if (want && got && want !== got) continue;
@@ -107,12 +94,7 @@ async function google(query, opts = {}) {
   u.searchParams.set('address', query);
   u.searchParams.set('region', 'in');
   u.searchParams.set('language', 'en');
-  // Always restrict to India. Strict mode also filters by postal_code.
-  const pin = normalizePincode(opts.pincode);
-  const components = (opts.strictPostal && pin)
-    ? `country:IN|postal_code:${pin}`
-    : 'country:IN';
-  u.searchParams.set('components', components);
+  u.searchParams.set('components', 'country:IN');
   // Viewport bias covering India
   u.searchParams.set('bounds', '6.0,68.0|38.0,98.0');
   u.searchParams.set('key', cfg.googleKey);
@@ -133,21 +115,25 @@ async function google(query, opts = {}) {
   }
   if (j.status === 'ZERO_RESULTS' || !j.results?.length) return null;
 
-  // Prefer street/building grade over city APPROXIMATE
-  let pick = j.results[0];
-  if (opts.requireStreetLevel) {
-    pick = j.results.find((x) => !isCoarseConfidence(x.geometry?.location_type)) || null;
+  const wantPin = normalizePincode(opts.pincode);
+  const candidates = opts.requireStreetLevel
+    ? j.results.filter((x) => !isCoarseConfidence(x.geometry?.location_type))
+    : j.results;
+  if (!candidates.length) return null;
+
+  for (const pick of candidates) {
+    if (!pick?.geometry?.location) continue;
+    const postal = pick.address_components?.find((c) =>
+      (c.types || []).includes('postal_code'))?.long_name || null;
+    const gotPin = normalizePincode(postal);
+    if (wantPin && gotPin && wantPin !== gotPin) continue;
+    return {
+      lat: Number(pick.geometry.location.lat),
+      lng: Number(pick.geometry.location.lng),
+      confidence: pick.geometry.location_type || 'unknown',
+      provider: 'google',
+      postalCode: postal,
+    };
   }
-  if (!pick?.geometry?.location) return null;
-
-  const postal = pick.address_components?.find((c) =>
-    (c.types || []).includes('postal_code'))?.long_name || null;
-
-  return {
-    lat: Number(pick.geometry.location.lat),
-    lng: Number(pick.geometry.location.lng),
-    confidence: pick.geometry.location_type || 'unknown',
-    provider: 'google',
-    postalCode: postal,
-  };
+  return null;
 }

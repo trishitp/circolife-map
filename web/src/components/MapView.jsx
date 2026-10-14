@@ -2,7 +2,11 @@ import { useEffect, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import Supercluster from 'supercluster';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { fetchLayer, fetchLayerFeature, fetchCoverageGrid } from '../lib/api';
+import {
+  fetchLayer, fetchLayersBatch, fetchLayerFeature, fetchCoverageGrid, fetchLayerCounts,
+} from '../lib/api';
+import { tagMeetingVisitZone } from '../lib/pincode.js';
+import { meetingPinIconLayout } from '../lib/acIcon.js';
 import { onSelection } from '../lib/selection';
 import { resolveBasemapStyle, LABEL_FONTS_BY_STYLE, attachGoogleAttribution } from '../lib/basemap';
 import { INDIA_BOUNDS, INDIA_CENTER, INDIA_DEFAULT_ZOOM, INDIA_MIN_ZOOM } from '../lib/mapBounds';
@@ -312,10 +316,13 @@ function ensureCoverage(m, wired, onSelect) {
 export default function MapView({
   active, filters, onSelect, onLoading, focusRequest, onFocusHandled, visible,
   onMapIssue, insight, onInsight, flyRequest, onFlyHandled, markerStyle,
+  bdmPincodes, onFilteredCounts,
 }) {
   const el = useRef(null);
   const map = useRef(null);
   const debounce = useRef(null);
+  const countDebounce = useRef(null);
+  const countAbortRef = useRef(null);
   const abortRef = useRef(null);
   const selectedId = useRef(null);
   const ready = useRef(false);
@@ -333,6 +340,8 @@ export default function MapView({
   const onInsightRef = useRef(onInsight);
   const onFlyHandledRef = useRef(onFlyHandled);
   const styleRef = useRef(normalizeMarkerStyle(markerStyle));
+  const bdmPincodeSetRef = useRef(null);
+  const onFilteredCountsRef = useRef(onFilteredCounts);
   activeRef.current = active;
   filtersRef.current = filters;
   onSelectRef.current = onSelect;
@@ -343,6 +352,19 @@ export default function MapView({
   onInsightRef.current = onInsight;
   onFlyHandledRef.current = onFlyHandled;
   styleRef.current = normalizeMarkerStyle(markerStyle);
+  onFilteredCountsRef.current = onFilteredCounts;
+  bdmPincodeSetRef.current = Array.isArray(bdmPincodes) && bdmPincodes.length
+    ? new Set(bdmPincodes)
+    : null;
+
+  const applyMeetingPinLayout = () => {
+    const m = map.current;
+    if (!m || !m.getLayer('meetings-pts')) return;
+    const layout = meetingPinIconLayout(Boolean(bdmPincodeSetRef.current?.size));
+    try {
+      m.setLayoutProperty('meetings-pts', 'icon-image', layout['icon-image']);
+    } catch { /* style not ready */ }
+  };
 
   const pushDisplay = () => {
     const m = map.current;
@@ -401,30 +423,57 @@ export default function MapView({
       const truncLayers = [];
       try {
         const layers = Object.keys(LAYER_COLORS);
-        await Promise.all(layers.map(async (layer) => {
+        const activeLayers = layers.filter((l) => activeRef.current.has(l));
+        for (const layer of layers) {
           if (!activeRef.current.has(layer)) {
             featsRef.current[layer] = [];
             indexes.current[layer] = null;
             m.getSource(layer)?.setData({ type: 'FeatureCollection', features: [] });
-            return;
           }
-          try {
-            const gj = await fetchLayer(layer, wide, filtersRef.current, { signal: ac.signal });
-            if (ac.signal.aborted) return;
-            if (gj?.meta?.truncated) truncLayers.push(layer);
-            const feats = (gj.features || []).filter((f) =>
-              f?.geometry?.type === 'Point' && Array.isArray(f.geometry.coordinates));
-            featsRef.current[layer] = feats;
-            indexes.current[layer] = null;
-          } catch (e) {
-            if (e?.name === 'AbortError' || ac.signal.aborted) return;
-            console.warn(e);
+        }
+        const applyLayerPayload = (layer, gj) => {
+          if (gj?.meta?.truncated) truncLayers.push(layer);
+          let feats = (gj.features || []).filter((f) =>
+            f?.geometry?.type === 'Point' && Array.isArray(f.geometry.coordinates));
+          if (layer === 'meetings' && bdmPincodeSetRef.current?.size) {
+            feats = feats.map((f) => tagMeetingVisitZone(f, bdmPincodeSetRef.current));
+          }
+          featsRef.current[layer] = feats;
+          indexes.current[layer] = null;
+        };
+        const loadOneLayer = async (layer) => {
+          const gj = await fetchLayer(layer, wide, filtersRef.current, { signal: ac.signal });
+          if (ac.signal.aborted) return;
+          applyLayerPayload(layer, gj);
+        };
+        try {
+          if (activeLayers.length >= 2) {
+            try {
+              const batch = await fetchLayersBatch(wide, activeLayers, filtersRef.current, {
+                signal: ac.signal,
+              });
+              if (ac.signal.aborted) return;
+              for (const layer of activeLayers) {
+                applyLayerPayload(layer, batch.layers?.[layer] || { features: [] });
+              }
+            } catch (batchErr) {
+              if (batchErr?.name === 'AbortError' || ac.signal.aborted) return;
+              console.warn('[map] batch load failed, falling back per layer', batchErr);
+              await Promise.all(activeLayers.map((layer) => loadOneLayer(layer)));
+            }
+          } else if (activeLayers.length === 1) {
+            await loadOneLayer(activeLayers[0]);
+          }
+        } catch (e) {
+          if (e?.name === 'AbortError' || ac.signal.aborted) return;
+          console.warn(e);
+          for (const layer of activeLayers) {
             featsRef.current[layer] = [];
             indexes.current[layer] = null;
             m.getSource(layer)?.setData({ type: 'FeatureCollection', features: [] });
-            loadIssues.push(`${layer}: ${e.message || 'load failed'}`);
           }
-        }));
+          loadIssues.push(e.message || 'map load failed');
+        }
 
         const ins = insightRef.current || { mode: 'off', days: 90 };
         if (ins.mode && ins.mode !== 'off') {
@@ -474,6 +523,31 @@ export default function MapView({
         }
         if (!ac.signal.aborted) {
           pushDisplay();
+          applyMeetingPinLayout();
+          clearTimeout(countDebounce.current);
+          countDebounce.current = setTimeout(async () => {
+            countAbortRef.current?.abort();
+            const countAc = new AbortController();
+            countAbortRef.current = countAc;
+            try {
+              const countLayers = layers.filter((l) => activeRef.current.has(l));
+              if (!countLayers.length) {
+                onFilteredCountsRef.current?.({ counts: {}, total: 0, layers: [] });
+                return;
+              }
+              const countPayload = await fetchLayerCounts(
+                wide,
+                filtersRef.current,
+                countLayers,
+                { signal: countAc.signal },
+              );
+              if (!countAc.signal.aborted) onFilteredCountsRef.current?.(countPayload);
+            } catch (e) {
+              if (e?.name !== 'AbortError' && !countAc.signal.aborted) {
+                console.warn('[layer-counts]', e);
+              }
+            }
+          }, 450);
           if (loadIssues.length) {
             onMapIssueRef.current?.({
               type: 'error',
@@ -491,7 +565,7 @@ export default function MapView({
       } finally {
         if (!ac.signal.aborted) onLoadingRef.current?.(false);
       }
-    }, 200);
+    }, 320);
   };
 
   useEffect(() => {
@@ -607,7 +681,9 @@ export default function MapView({
     return () => {
       cancelled = true;
       clearTimeout(debounce.current);
+      clearTimeout(countDebounce.current);
       abortRef.current?.abort();
+      countAbortRef.current?.abort();
       if (zoomRaf.current) cancelAnimationFrame(zoomRaf.current);
       detachGoogle();
       ro?.disconnect();
@@ -618,7 +694,14 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { refresh(); }, [active, filters, insight?.mode, insight?.days]); // eslint-disable-line
+  useEffect(() => { refresh(); }, [active, filters, insight?.mode, insight?.days, bdmPincodes]); // eslint-disable-line
+
+  useEffect(() => {
+    applyMeetingPinLayout();
+    if (!map.current || !ready.current) return;
+    indexes.current.meetings = null;
+    pushDisplay();
+  }, [bdmPincodes]); // eslint-disable-line
 
   useEffect(() => {
     const m = map.current;

@@ -14,7 +14,8 @@ const abbr = (n) => {
   return String(n);
 };
 
-export default function LayerDock({ active, toggle, counts }) {
+export default function LayerDock({ active, toggle, counts, filteredCounts }) {
+  const showFiltered = filteredCounts && typeof filteredCounts === 'object';
   return (
     <nav className="layer-dock" aria-label="Map layers">
       {META.map((l) => (
@@ -31,7 +32,16 @@ export default function LayerDock({ active, toggle, counts }) {
             : <span className="dot" style={{ background: l.color }} aria-hidden />}
           <span className="layer-label-full">{l.label}</span>
           <span className="layer-label-short">{l.short}</span>
-          <span className="count">{abbr(counts[l.key])}</span>
+          <span
+            className="count"
+            title={showFiltered && active.has(l.key) ? 'In current map view with filters' : undefined}
+          >
+            {abbr(
+              showFiltered && active.has(l.key) && filteredCounts[l.key] != null
+                ? filteredCounts[l.key]
+                : counts[l.key],
+            )}
+          </span>
         </button>
       ))}
     </nav>

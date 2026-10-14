@@ -48,6 +48,8 @@ export const cfg = {
   geocoder: process.env.GEOCODER || 'google',
   olaKey: process.env.OLAMAPS_API_KEY,
   googleKey: process.env.GOOGLE_MAPS_API_KEY,
+  /** carto = free Voyager tiles (default). google = Map Tiles API (billed in GCP). */
+  basemap: (process.env.BASEMAP || 'carto').toLowerCase(),
   /** Shared secret still used to bootstrap the first admin (and HMAC fallback). */
   appPassword: process.env.APP_PASSWORD || '',
   /**

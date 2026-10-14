@@ -8,6 +8,10 @@ const POSITRON = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
 
 const GOOGLE_LOGO = 'https://maps.gstatic.com/mapfiles/api-3/images/google_gray.svg';
 
+let resolvedBasemapCache = null;
+let resolvedBasemapAt = 0;
+const BASEMAP_CACHE_MS = 10 * 60 * 1000;
+
 export function buildGoogleStyle(sessionPayload) {
   const { session, key, tileWidth = 256 } = sessionPayload;
   const tiles = [
@@ -37,13 +41,31 @@ export function buildGoogleStyle(sessionPayload) {
   };
 }
 
-export async function resolveBasemapStyle() {
+async function loadCartoStyle() {
+  try {
+    const r = await fetch(VOYAGER);
+    if (!r.ok) throw new Error(`voyager ${r.status}`);
+    return { style: await r.json(), id: 'voyager', provider: 'carto' };
+  } catch (e2) {
+    console.warn('[basemap] voyager unavailable, using Positron', e2.message);
+    return { style: POSITRON, id: 'positron', provider: 'carto' };
+  }
+}
+
+export async function resolveBasemapStyle({ force = false } = {}) {
+  const now = Date.now();
+  if (!force && resolvedBasemapCache && now - resolvedBasemapAt < BASEMAP_CACHE_MS) {
+    return resolvedBasemapCache;
+  }
   try {
     const maps = await fetchMapsSession();
     if (!maps?.enabled || !maps.session || !maps.key) {
-      throw new Error(maps?.error || 'Google Maps not enabled');
+      const carto = await loadCartoStyle();
+      resolvedBasemapCache = carto;
+      resolvedBasemapAt = now;
+      return carto;
     }
-    return {
+    const next = {
       style: buildGoogleStyle(maps),
       id: 'google',
       provider: 'google',
@@ -51,16 +73,15 @@ export async function resolveBasemapStyle() {
       expiry: maps.expiry,
       key: maps.key,
     };
+    resolvedBasemapCache = next;
+    resolvedBasemapAt = now;
+    return next;
   } catch (e) {
     console.warn('[basemap] Google unavailable, using Voyager', e.message);
-    try {
-      const r = await fetch(VOYAGER);
-      if (!r.ok) throw new Error(`voyager ${r.status}`);
-      return { style: await r.json(), id: 'voyager', provider: 'carto' };
-    } catch (e2) {
-      console.warn('[basemap] voyager unavailable, using Positron', e2.message);
-      return { style: POSITRON, id: 'positron', provider: 'carto' };
-    }
+    const carto = await loadCartoStyle();
+    resolvedBasemapCache = carto;
+    resolvedBasemapAt = now;
+    return carto;
   }
 }
 
@@ -103,17 +124,18 @@ export function attachGoogleAttribution(map, sessionInfo) {
   // Keep tile session warm via light viewport ping (no UI)
   let busy = false;
   let lastKey = '';
+  let pingTimer;
   let refreshTimer;
   const pingViewport = async () => {
     if (busy) return;
     const b = map.getBounds?.();
     if (!b) return;
     const zoom = Math.round(map.getZoom?.() || 5);
-    const key = [sessionInfo.session, zoom, b.getNorth().toFixed(2)].join('|');
+    const key = [sessionInfo.session, zoom, b.getNorth().toFixed(1), b.getWest().toFixed(1)].join('|');
     if (key === lastKey) return;
     busy = true;
     try {
-      await fetchMapsViewport({
+      const data = await fetchMapsViewport({
         session: sessionInfo.session,
         zoom,
         north: b.getNorth(),
@@ -121,6 +143,7 @@ export function attachGoogleAttribution(map, sessionInfo) {
         east: b.getEast(),
         west: b.getWest(),
       });
+      if (data?.enabled === false) return;
       lastKey = key;
     } catch {
       /* non-fatal */
@@ -129,8 +152,13 @@ export function attachGoogleAttribution(map, sessionInfo) {
     }
   };
 
-  map.on('moveend', pingViewport);
-  requestAnimationFrame(() => { pingViewport(); });
+  const schedulePing = () => {
+    clearTimeout(pingTimer);
+    pingTimer = setTimeout(pingViewport, 2500);
+  };
+
+  map.on('moveend', schedulePing);
+  requestAnimationFrame(schedulePing);
 
   const scheduleRefresh = () => {
     clearTimeout(refreshTimer);
@@ -156,7 +184,8 @@ export function attachGoogleAttribution(map, sessionInfo) {
 
   return () => {
     clearTimeout(refreshTimer);
-    map.off('moveend', pingViewport);
+    clearTimeout(pingTimer);
+    map.off('moveend', schedulePing);
     map.off('styledata', hideAttrib);
     logo?.remove();
     container.querySelector('.google-maps-attrib')?.remove();

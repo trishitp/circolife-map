@@ -2,7 +2,7 @@
 // this is what keeps mobile on 4G alive at 75K+ leads.
 import { Router } from 'express';
 import { q } from '../db.js';
-import { buildMapFilterClauses } from '../filters/mapFilters.js';
+import { buildMapFilterClauses, parseList } from '../filters/mapFilters.js';
 import { layerVisibilityClauses } from '../filters/layerPolicy.js';
 import { redactMacInText, scrubPublicProperties } from '../privacy/mac.js';
 
@@ -48,7 +48,31 @@ LEFT JOIN map_points acc
  AND NULLIF(p.extra->>'accountId', '') IS NOT NULL
  AND acc.source_id = p.extra->>'accountId'`;
 
-function buildFilterWheres(req, layer, params) {
+async function queryLayerFeatures(req, layer, bbox, limit) {
+  const params = [layer, ...bbox];
+  const wheres = buildFilterWheres(req, layer, params);
+  const { rows } = await q(`
+    SELECT ${POINT_SELECT_P},
+           acc.title AS account_title,
+           acc.crm_url AS account_crm_url
+    FROM (
+      SELECT ${POINT_SELECT}
+      FROM map_points
+      WHERE ${wheres.join(' AND ')}
+      ORDER BY record_ts DESC NULLS LAST, source_id
+      LIMIT ${limit + 1}
+    ) p
+    ${ACCOUNT_JOIN}`, params);
+  const truncated = rows.length > limit;
+  const slice = truncated ? rows.slice(0, limit) : rows;
+  return {
+    type: 'FeatureCollection',
+    features: slice.map(featureFromRow),
+    meta: { layer, returned: slice.length, limit, truncated },
+  };
+}
+
+export function buildFilterWheres(req, layer, params) {
   const wheres = [
     `layer = $1`, `geom IS NOT NULL`,
     `geom && ST_MakeEnvelope($2,$3,$4,$5,4326)`,
@@ -56,6 +80,29 @@ function buildFilterWheres(req, layer, params) {
   wheres.push(...buildMapFilterClauses(req.query, params, { layer }));
   return wheres;
 }
+
+// GET /api/layers/batch?bbox=&layers=leads,meetings&…filters
+layers.get('/batch', async (req, res) => {
+  try {
+    const bbox = (req.query.bbox || '').split(',').map(Number);
+    if (bbox.length !== 4 || bbox.some((n) => !Number.isFinite(n))) {
+      return res.status(400).json({ error: 'bbox=minLng,minLat,maxLng,maxLat required' });
+    }
+    const layerList = parseList(req.query.layers).filter((l) => LAYERS.has(l));
+    if (!layerList.length) {
+      return res.status(400).json({ error: 'layers=leads,accounts,... required' });
+    }
+    const limit = Math.min(Math.max(Number(req.query.limit) || 8000, 1), 25000);
+    const out = {};
+    await Promise.all(layerList.map(async (layer) => {
+      out[layer] = await queryLayerFeatures(req, layer, bbox, limit);
+    }));
+    res.json({ layers: out });
+  } catch (e) {
+    console.error('[layers/batch]', e);
+    res.status(500).json({ error: e.message || 'batch layer query failed' });
+  }
+});
 
 // GET /api/layers/:layer/feature/:id — single plotted point (for focus-from-list)
 layers.get('/:layer/feature/:id', async (req, res) => {
@@ -97,37 +144,8 @@ layers.get('/:layer', async (req, res) => {
     if (bbox.length !== 4 || bbox.some((n) => !Number.isFinite(n)))
       return res.status(400).json({ error: 'bbox=minLng,minLat,maxLng,maxLat required' });
 
-    const params = [layer, ...bbox];
-    const wheres = buildFilterWheres(req, layer, params);
     const limit = Math.min(Math.max(Number(req.query.limit) || 8000, 1), 25000);
-
-    // Fetch limit+1 so we can report truncation without a full COUNT.
-    const { rows } = await q(`
-      SELECT ${POINT_SELECT_P},
-             acc.title AS account_title,
-             acc.crm_url AS account_crm_url
-      FROM (
-        SELECT ${POINT_SELECT}
-        FROM map_points
-        WHERE ${wheres.join(' AND ')}
-        ORDER BY record_ts DESC NULLS LAST, source_id
-        LIMIT ${limit + 1}
-      ) p
-      ${ACCOUNT_JOIN}`, params);
-
-    const truncated = rows.length > limit;
-    const slice = truncated ? rows.slice(0, limit) : rows;
-
-    res.json({
-      type: 'FeatureCollection',
-      features: slice.map(featureFromRow),
-      meta: {
-        layer,
-        returned: slice.length,
-        limit,
-        truncated,
-      },
-    });
+    res.json(await queryLayerFeatures(req, layer, bbox, limit));
   } catch (e) {
     console.error('[layers]', e);
     res.status(500).json({ error: e.message || 'layer query failed' });

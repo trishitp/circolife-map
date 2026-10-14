@@ -21,7 +21,14 @@ export async function loadGoogleMaps() {
       });
       // Ensures Maps JS is bootstrapped; Map lives on window.google.maps after this.
       await importLibrary('maps');
-      reportClientUsage('maps_js_load').catch(() => {});
+      try {
+        if (!sessionStorage.getItem('circo.mapsJsLogged')) {
+          sessionStorage.setItem('circo.mapsJsLogged', '1');
+          reportClientUsage('maps_js_load').catch(() => {});
+        }
+      } catch {
+        reportClientUsage('maps_js_load').catch(() => {});
+      }
       return window.google.maps;
     })().catch((err) => {
       loaderPromise = null;

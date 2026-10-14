@@ -87,7 +87,7 @@ cd ../web && npm i && npm run dev
 and street geocoding misses. Without it, the pipeline falls through to territory
 centroids only.
 
-Open http://localhost:4040 — sign in with Zoho (set `ZOHO_LOGIN_REDIRECT_URI`). Use **Admin → Clear failed + re-geocode** after first sync, then **Rebuild discrepancies** (or full sync, which rebuilds automatically).
+Open http://localhost:4040 — sign in with Zoho (set `ZOHO_LOGIN_REDIRECT_URI`). Default basemap is **Carto** (`BASEMAP=carto`) to avoid Map Tiles spend; set `BASEMAP=google` for Google roadmap. Use **Admin → Re-geocode weak pins** sparingly (geocoding is billed); **Retry failed addresses** only when you mean to pay for another pass.
 
 Optional: `npm run regeocode` in `server/`.
 

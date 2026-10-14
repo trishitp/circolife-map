@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { q } from '../db.js';
 import { cfg } from '../config.js';
-import { TERRITORY_GROUP_KEYS } from '../filters/mapFilters.js';
+import { TERRITORY_GROUP_KEYS, parseList } from '../filters/mapFilters.js';
 import { sqlMapPointVisible } from '../filters/layerPolicy.js';
 import { syncUsers } from '../sync/sync.js';
 import { recordUsage, isClientSku } from '../usage/meter.js';
 import { getMapMarkerStyle } from '../mapStyle.js';
+import { getPincodesForBdm, normalizeBdmName } from '../bdmPincodes.js';
+import { buildFilterWheres } from './layers.js';
 
 export const meta = Router();
 
@@ -65,6 +67,15 @@ const GOOGLE_MAP_STYLES = [
   },
 ];
 
+let cachedTileSession = null;
+
+function tileSessionFresh(entry) {
+  if (!entry?.payload?.session) return false;
+  const exp = Number(entry.payload.expiry) * 1000;
+  if (!Number.isFinite(exp)) return true;
+  return exp > Date.now() + 5 * 60 * 1000;
+}
+
 async function createGoogleTileSession() {
   if (!cfg.googleKey) {
     const err = new Error('GOOGLE_MAPS_API_KEY not configured');
@@ -101,13 +112,24 @@ async function createGoogleTileSession() {
   return data;
 }
 
+async function getGoogleTileSessionCached() {
+  if (tileSessionFresh(cachedTileSession)) return cachedTileSession.payload;
+  const session = await createGoogleTileSession();
+  cachedTileSession = { payload: session, at: Date.now() };
+  return session;
+}
+
 // GET /api/meta/maps — Google Map Tiles session for the web basemap
 meta.get('/maps', async (_req, res) => {
   try {
-    if (!cfg.googleKey) {
-      return res.json({ enabled: false, provider: null });
+    if (cfg.basemap !== 'google' || !cfg.googleKey) {
+      return res.json({
+        enabled: false,
+        provider: cfg.basemap === 'google' ? null : 'carto',
+        basemap: cfg.basemap,
+      });
     }
-    const session = await createGoogleTileSession();
+    const session = await getGoogleTileSessionCached();
     res.json({
       enabled: true,
       provider: 'google',
@@ -133,7 +155,9 @@ meta.get('/maps', async (_req, res) => {
 // GET /api/meta/maps/viewport — required Google copyright string for current view
 meta.get('/maps/viewport', async (req, res) => {
   try {
-    if (!cfg.googleKey) return res.status(503).json({ error: 'GOOGLE_MAPS_API_KEY not configured' });
+    if (cfg.basemap !== 'google' || !cfg.googleKey) {
+      return res.json({ copyright: '', enabled: false });
+    }
     const session = String(req.query.session || '').trim();
     if (!session) return res.status(400).json({ error: 'session required' });
     const zoom = Number(req.query.zoom);
@@ -171,6 +195,49 @@ meta.get('/maps/viewport', async (req, res) => {
 });
 
 // Counts per layer + geo coverage; drives the layer dock badges and DQ panel
+const MAP_LAYERS = ['leads', 'accounts', 'meetings', 'assets'];
+
+// GET /api/meta/layer-counts?bbox=&layers=leads,meetings&owner=...
+meta.get('/layer-counts', async (req, res) => {
+  try {
+    const bbox = (req.query.bbox || '').split(',').map(Number);
+    if (bbox.length !== 4 || bbox.some((n) => !Number.isFinite(n))) {
+      return res.status(400).json({ error: 'bbox=minLng,minLat,maxLng,maxLat required' });
+    }
+    const layers = parseList(req.query.layers).filter((l) => MAP_LAYERS.includes(l));
+    const target = layers.length ? layers : MAP_LAYERS;
+    const counts = {};
+    let total = 0;
+    for (const layer of target) {
+      const params = [layer, ...bbox];
+      const wheres = buildFilterWheres(req, layer, params);
+      const { rows } = await q(
+        `SELECT COUNT(*)::int AS n FROM map_points WHERE ${wheres.join(' AND ')}`,
+        params,
+      );
+      counts[layer] = rows[0]?.n || 0;
+      total += counts[layer];
+    }
+    res.json({ counts, total, layers: target });
+  } catch (e) {
+    console.error('[meta/layer-counts]', e);
+    res.status(500).json({ error: e.message || 'layer counts failed' });
+  }
+});
+
+// GET /api/meta/bdm-pincodes?owner=Full Name
+meta.get('/bdm-pincodes', async (req, res) => {
+  try {
+    const owner = normalizeBdmName(req.query.owner);
+    if (!owner) return res.status(400).json({ error: 'owner query required' });
+    const pincodes = await getPincodesForBdm(owner);
+    res.json({ owner, pincodes, count: pincodes.length });
+  } catch (e) {
+    console.error('[meta/bdm-pincodes]', e);
+    res.status(500).json({ error: e.message || 'bdm pincodes failed' });
+  }
+});
+
 meta.get('/stats', async (_req, res) => {
   try {
     const { rows } = await q(`

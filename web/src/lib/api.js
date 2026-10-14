@@ -123,6 +123,34 @@ export async function fetchLayer(layer, bbox, filters, opts = {}) {
   );
 }
 
+export async function fetchLayersBatch(bbox, layers, filters, opts = {}) {
+  return jfetch(
+    `/api/layers/batch?${qs({
+      bbox: bbox.join(','),
+      layers: layers.join(','),
+      ...layerQuery(filters),
+    })}`,
+    opts,
+  );
+}
+
+const FILTERS_CACHE_MS = 5 * 60 * 1000;
+let filtersCache = null;
+let filtersCacheAt = 0;
+
+export function invalidateFiltersCache() {
+  filtersCache = null;
+  filtersCacheAt = 0;
+}
+
+export async function fetchFiltersCached() {
+  const now = Date.now();
+  if (filtersCache && now - filtersCacheAt < FILTERS_CACHE_MS) return filtersCache;
+  filtersCache = await fetchFilters();
+  filtersCacheAt = now;
+  return filtersCache;
+}
+
 export async function fetchLayerFeature(layer, id, opts = {}) {
   return jfetch(`/api/layers/${layer}/feature/${encodeURIComponent(id)}`, opts);
 }
@@ -130,6 +158,18 @@ export const fetchCoverageGrid = (params, opts = {}) =>
   jfetch(`/api/coverage/grid?${qs(params)}`, opts);
 export const fetchStats = () => jfetch('/api/meta/stats');
 export const fetchFilters = () => jfetch('/api/meta/filters');
+export const fetchBdmPincodes = (owner) =>
+  jfetch(`/api/meta/bdm-pincodes?${qs({ owner })}`);
+export async function fetchLayerCounts(bbox, filters = {}, layers = [], opts = {}) {
+  const params = { bbox: bbox.join(','), ...layerQuery(filters) };
+  if (layers.length) params.layers = layers.join(',');
+  return jfetch(`/api/meta/layer-counts?${qs(params)}`, opts);
+}
+export const uploadBdmPincodes = ({ csv, base64, filename }) =>
+  jfetch('/api/admin/bdm-pincodes', {
+    method: 'POST',
+    body: JSON.stringify({ csv, base64, filename }),
+  });
 
 export const fetchMapsSession = () => jfetch('/api/meta/maps');
 export const fetchMapsViewport = (params) =>

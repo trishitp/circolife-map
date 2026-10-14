@@ -28,8 +28,10 @@ function addSharedFilters(query, params, { forMeetings } = {}) {
   };
 
   const owners = parseList(query.owner);
-  if (owners.length === 1) add(`owner_name = ?`, owners[0]);
-  else if (owners.length > 1) addAny(`owner_name = ANY(?::text[])`, owners);
+  if (forMeetings) {
+    if (owners.length === 1) add(`owner_name = ?`, owners[0]);
+    else if (owners.length > 1) addAny(`owner_name = ANY(?::text[])`, owners);
+  }
 
   const territories = parseList(query.territory)
     .map((t) => (TERRITORY_GROUPS[t] ? t : null))

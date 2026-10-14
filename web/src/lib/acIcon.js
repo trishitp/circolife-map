@@ -8,6 +8,12 @@ export const LAYER_PIN_COLORS = {
   assets: GREEN,
 };
 
+/** Visit pins when BDM pincode mapping is active (assigned vs outside territory). */
+export const VISIT_ZONE_PIN_COLORS = {
+  in: '#2563EB',
+  out: '#DC2626',
+};
+
 function pinSvg(size) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 64 64">
     <circle cx="32" cy="32" r="30" fill="${GREEN}" stroke="${CREAM}" stroke-width="3"/>
@@ -78,5 +84,28 @@ export async function loadMapIcons(map) {
       if (!map.hasImage(id)) map.addImage(id, data, { pixelRatio: 2 });
     }));
   }
+  for (const [zone, color] of Object.entries(VISIT_ZONE_PIN_COLORS)) {
+    const id = `drop-pin-meetings-${zone}`;
+    if (map.hasImage(id)) continue;
+    jobs.push(svgToImageData(dropPinSvg(color, pinW, pinH), pinW, pinH).then((data) => {
+      if (!map.hasImage(id)) map.addImage(id, data, { pixelRatio: 2 });
+    }));
+  }
   await Promise.all(jobs);
+}
+
+export function meetingPinIconLayout(useVisitZones) {
+  if (!useVisitZones) {
+    return {
+      'icon-image': 'drop-pin-meetings',
+    };
+  }
+  return {
+    'icon-image': [
+      'match', ['get', 'visitZone'],
+      'in', 'drop-pin-meetings-in',
+      'out', 'drop-pin-meetings-out',
+      'drop-pin-meetings',
+    ],
+  };
 }

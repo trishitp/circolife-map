@@ -39,7 +39,11 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
         <ol className="help-steps">
           <li>
             <strong>Layers</strong>
-            <span>Turn Leads, Accounts, Meetings, and Assets on or off. Assets shows installed AC units only — not parent containers. Accounts shows only where at least one asset is on the map. Layer counts match those rules.</span>
+            <span>Turn Leads, Accounts, Meetings, and Assets on or off. Assets shows installed AC units only — not parent containers. Accounts shows only where at least one asset is on the map. Layer pill counts reflect the current map view and filters; the banner shows the total visible records.</span>
+          </li>
+          <li>
+            <strong>RM filter and visits</strong>
+            <span>When one RM is selected and Admin has uploaded BDM pincode mapping, their meetings show blue in assigned pincodes and red outside. Leads and accounts in the area stay visible for all owners so you can spot extra visit opportunities.</span>
           </li>
           <li>
             <strong>Pan and zoom</strong>
@@ -135,7 +139,7 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
           </li>
           <li>
             <strong>Build the plan</strong>
-            <span>Tap orange pins to add nearby leads or accounts. Reorder with the arrows, or remove a stop.</span>
+            <span>When BDM pincode mapping exists, drop-ins list all plannable leads and accounts in that RM’s assigned pincodes (any owner). Otherwise use nearby search around a stop. Reorder with the arrows, or remove a stop.</span>
           </li>
           <li>
             <strong>Get drive times</strong>
@@ -186,6 +190,7 @@ export default function HelpGuide({ onOpenTab, isAdmin = false }) {
           <li><strong>API cost</strong> — estimated Google Maps spend this month, with an editable rate card.</li>
           <li><strong>Users</strong> — grant admin after people sign in with Zoho; disable accounts.</li>
           <li><strong>Overrides</strong> — set latitude and longitude for a known-correct location.</li>
+          <li><strong>BDM pincode mapping</strong> — upload Excel or CSV (BDM/RM name + pincode) for visit colours and route planning.</li>
         </ol>
       </section>
       )}

@@ -14,6 +14,9 @@ import {
 } from '../accounts.js';
 import { zohoLoginEnabled } from '../zoho/login.js';
 import { getMapMarkerStyle, setMapMarkerStyle } from '../mapStyle.js';
+import {
+  assignmentSummary, parseAssignmentUpload, replaceAllAssignments,
+} from '../bdmPincodes.js';
 
 export const admin = Router();
 // Auth is enforced app-wide by requireAuth; writes may also need ADMIN_TOKEN.
@@ -71,6 +74,7 @@ admin.get('/dashboard', async (_req, res) => {
     FROM sync_runs ORDER BY started_at DESC LIMIT 10`);
   const pins = await q(`SELECT COUNT(*)::int AS n FROM pincode_centroids`);
   const terr = await q(`SELECT COUNT(*)::int AS n FROM territory_centroids`);
+  const bdmPins = await assignmentSummary();
 
   res.json({
     coverage: coverage.rows,
@@ -79,6 +83,7 @@ admin.get('/dashboard', async (_req, res) => {
     lastRuns: lastRuns.rows,
     pincodeCentroids: pins.rows[0].n,
     territoryCentroids: terr.rows[0].n,
+    bdmPincodeAssignments: bdmPins,
     geocoder: cfg.geocoder,
     hasGoogleKey: Boolean(cfg.googleKey),
     hasOlaKey: Boolean(cfg.olaKey),
@@ -153,9 +158,12 @@ admin.post('/sync/assets', async (_req, res) => {
 
 admin.post('/regeocode', async (req, res) => {
   try {
-    const clearFailed = req.body?.clearFailed !== false;
-    const limitRows = Number(req.body?.limit) || 50000;
-    const j = await startJob('regeocode', () => runRegeocode({ clearFailed, limitRows }));
+    const clearFailed = req.body?.clearFailed === true;
+    const upgradePincodeRows = req.body?.upgradePincodeRows === true;
+    const limitRows = Math.min(Math.max(Number(req.body?.limit) || 5000, 1), 50000);
+    const j = await startJob('regeocode', () => runRegeocode({
+      clearFailed, limitRows, upgradePincodeRows,
+    }));
     res.status(202).json(j);
   } catch (e) {
     res.status(e.code === 'BUSY' ? 409 : 500).json({ error: e.message });
@@ -210,6 +218,36 @@ admin.patch('/points/:layer/:id', async (req, res) => {
   if (!r.rowCount) return res.status(404).json({ error: 'point not found' });
   await q(`DELETE FROM unplottable_log WHERE layer=$1 AND source_id=$2`, [layer, id]);
   res.json(r.rows[0]);
+});
+
+admin.get('/bdm-pincodes/summary', async (_req, res) => {
+  try {
+    res.json(await assignmentSummary());
+  } catch (e) {
+    console.error('[admin/bdm-pincodes/summary]', e);
+    res.status(500).json({ error: e.message || 'summary failed' });
+  }
+});
+
+/** Replace all BDM pincode rows from CSV text or base64 Excel (.xlsx). */
+admin.post('/bdm-pincodes', async (req, res) => {
+  try {
+    let buffer = null;
+    const b64 = req.body?.base64;
+    if (b64 && typeof b64 === 'string') {
+      buffer = Buffer.from(b64, 'base64');
+    }
+    const rows = await parseAssignmentUpload({
+      csv: req.body?.csv,
+      buffer,
+      filename: req.body?.filename,
+    });
+    const stats = await replaceAllAssignments(rows);
+    res.json({ ok: true, ...stats, uploaded: rows.length });
+  } catch (e) {
+    console.error('[admin/bdm-pincodes]', e);
+    res.status(e.status || 500).json({ error: e.message || 'upload failed' });
+  }
 });
 
 admin.post('/points/bulk', async (req, res) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import MapView from './components/MapView';
 import LayerDock from './components/LayerDock';
 import FilterPanel, {
@@ -21,8 +21,8 @@ import BrandMark from './components/BrandMark';
 import AppLoader from './components/AppLoader';
 import { IconInsights, IconLegend, IconZones } from './components/icons';
 import {
-  fetchStats, fetchFilters, fetchAuthStatus, fetchMe, login, logout, getAppToken,
-  setAppToken,
+  fetchStats, fetchFiltersCached, fetchAuthStatus, fetchMe, login, logout, getAppToken,
+  setAppToken, fetchBdmPincodes,
 } from './lib/api';
 import { DEFAULT_MARKER_STYLE, normalizeMarkerStyle } from './lib/mapMarkerStyle';
 
@@ -81,6 +81,9 @@ export default function App() {
   });
   const [optionsError, setOptionsError] = useState(null);
   const [counts, setCounts] = useState({});
+  const [filteredCounts, setFilteredCounts] = useState(null);
+  const [mapRecordTotal, setMapRecordTotal] = useState(null);
+  const [bdmPincodes, setBdmPincodes] = useState([]);
   const [selected, setSelected] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -107,7 +110,13 @@ export default function App() {
       if (fromUrl.token) setAppToken(fromUrl.token);
       const status = await fetchAuthStatus();
       if (!status.authRequired) {
-        if (!getAppToken()) await login({});
+        if (!getAppToken()) {
+          try {
+            await login({});
+          } catch {
+            /* open dev — /me works without token */
+          }
+        }
         const user = await fetchMe();
         setMe(user);
         setAuthState('ok');
@@ -142,7 +151,7 @@ export default function App() {
   useEffect(() => {
     if (authState !== 'ok') return undefined;
     setOptionsError(null);
-    fetchFilters()
+    fetchFiltersCached()
       .then((o) => {
         setOptions({
           owners: o.owners || [],
@@ -173,6 +182,24 @@ export default function App() {
   useEffect(() => {
     saveLastFilters(filters);
   }, [filters]);
+
+  const selectedRm = useMemo(() => {
+    const o = filters.owner;
+    const list = Array.isArray(o) ? o : (o ? [o] : []);
+    return list.length === 1 ? list[0] : null;
+  }, [filters.owner]);
+
+  useEffect(() => {
+    if (!selectedRm) {
+      setBdmPincodes([]);
+      return undefined;
+    }
+    let cancelled = false;
+    fetchBdmPincodes(selectedRm)
+      .then((r) => { if (!cancelled) setBdmPincodes(r.pincodes || []); })
+      .catch(() => { if (!cancelled) setBdmPincodes([]); });
+    return () => { cancelled = true; };
+  }, [selectedRm]);
 
   useEffect(() => {
     if (me && !me.admin && tab === 'admin') setTab('map');
@@ -348,6 +375,13 @@ export default function App() {
                   <div className="legend-row"><span className="legend-swatch approx" /> Check-in (~1 km)</div>
                   <div className="legend-row"><span className="legend-swatch pincode" /> Pincode / territory</div>
                   <div className="legend-row"><span className="legend-swatch inherited" /> Inherited</div>
+                  {selectedRm && bdmPincodes.length > 0 && (
+                    <>
+                      <strong>Visits ({selectedRm})</strong>
+                      <div className="legend-row"><span className="legend-swatch visit-in" /> Assigned pincode</div>
+                      <div className="legend-row"><span className="legend-swatch visit-out" /> Outside assigned pincode</div>
+                    </>
+                  )}
                 </>
               ) : insightMode === 'heat' ? (
                 <>
@@ -370,7 +404,12 @@ export default function App() {
             </div>
           )}
           <div className="map-chrome-docks">
-            <LayerDock active={active} toggle={toggle} counts={counts} />
+            <LayerDock
+              active={active}
+              toggle={toggle}
+              counts={counts}
+              filteredCounts={filteredCounts}
+            />
             <InsightDock
               mode={insightMode}
               days={insightDays}
@@ -435,6 +474,13 @@ export default function App() {
                     <div className="legend-row"><span className="legend-swatch approx" /> Check-in (~1 km)</div>
                     <div className="legend-row"><span className="legend-swatch pincode" /> Pincode / territory</div>
                     <div className="legend-row"><span className="legend-swatch inherited" /> Inherited</div>
+                    {selectedRm && bdmPincodes.length > 0 && (
+                      <>
+                        <strong>Visits ({selectedRm})</strong>
+                        <div className="legend-row"><span className="legend-swatch visit-in" /> Assigned pincode</div>
+                        <div className="legend-row"><span className="legend-swatch visit-out" /> Outside assigned pincode</div>
+                      </>
+                    )}
                   </>
                 ) : insightMode === 'heat' ? (
                   <>
@@ -462,6 +508,11 @@ export default function App() {
         <div className={`map-status ${loading ? 'show' : ''}`} aria-live="polite">
           Refreshing map…
         </div>
+        {tab === 'map' && mapRecordTotal != null && (
+          <div className="map-record-total" role="status">
+            Showing {mapRecordTotal.toLocaleString('en-IN')} record{mapRecordTotal === 1 ? '' : 's'} in view
+          </div>
+        )}
 
         {tab === 'map' && activeFilters.length > 0 && (
           <div className="map-filter-chips" aria-label="Active filters">
@@ -495,6 +546,11 @@ export default function App() {
         <MapView
           active={active}
           filters={filters}
+          bdmPincodes={bdmPincodes}
+          onFilteredCounts={(payload) => {
+            setFilteredCounts(payload?.counts || null);
+            setMapRecordTotal(payload?.total ?? null);
+          }}
           onSelect={(p) => {
             setSelected(p);
             if (p) setOppOpen(false);
