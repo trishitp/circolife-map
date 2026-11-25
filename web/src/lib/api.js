@@ -160,6 +160,15 @@ export const fetchStats = () => jfetch('/api/meta/stats');
 export const fetchFilters = () => jfetch('/api/meta/filters');
 export const fetchBdmPincodes = (owner) =>
   jfetch(`/api/meta/bdm-pincodes?${qs({ owner })}`);
+export const fetchPincodeCentroid = (pin) =>
+  jfetch(`/api/meta/pincode?${qs({ pin })}`);
+export const fetchMapSearch = (q) =>
+  jfetch(`/api/meta/search?${qs({ q })}`);
+export const fetchRelatedAssets = (params) =>
+  jfetch(`/api/meta/related-assets?${qs(params)}`);
+export const fetchQualitySnapshot = () => jfetch('/api/meta/quality-snapshot');
+export const fetchBdmScorecard = (params) =>
+  jfetch(`/api/meta/bdm-scorecard?${qs(params)}`);
 export async function fetchLayerCounts(bbox, filters = {}, layers = [], opts = {}) {
   const params = { bbox: bbox.join(','), ...layerQuery(filters) };
   if (layers.length) params.layers = layers.join(',');

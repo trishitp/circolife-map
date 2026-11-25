@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import MapView from './components/MapView';
-import LayerDock from './components/LayerDock';
 import FilterPanel, {
   activeFilterEntries, describeFilter, FILTER_LABELS,
   loadLastFilters, saveLastFilters,
@@ -20,7 +19,12 @@ import MobileNav from './components/MobileNav';
 import BrandMark from './components/BrandMark';
 import AppLoader from './components/AppLoader';
 import MapLegend from './components/MapLegend';
-import { IconInsights, IconLegend, IconZones } from './components/icons';
+import MapChromeShell from './components/MapChromeShell';
+import MapCoach from './components/MapCoach';
+import { IconInsights, IconInfo, IconZones } from './components/icons';
+import {
+  decodeShareHash, encodeShareHash, isFieldMode, packMapView, setFieldMode,
+} from './lib/mapViews';
 import {
   fetchStats, fetchFiltersCached, fetchAuthStatus, fetchMe, login, logout, getAppToken,
   setAppToken, fetchBdmPincodes,
@@ -71,6 +75,16 @@ function formatSyncAge(iso) {
   return `Synced ${days}d ago`;
 }
 
+function syncAgeClass(iso) {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '';
+  const hrs = (Date.now() - t) / 3600000;
+  if (hrs >= 72) return 'stale';
+  if (hrs >= 24) return 'warn';
+  return 'fresh';
+}
+
 function parseShareToken() {
   if (typeof window === 'undefined') return null;
   const hash = (window.location.hash || '').replace(/^#/, '');
@@ -96,6 +110,16 @@ export default function App() {
   const [filteredCounts, setFilteredCounts] = useState(null);
   const [mapRecordTotal, setMapRecordTotal] = useState(null);
   const [mapTruncatedLayers, setMapTruncatedLayers] = useState([]);
+  const [mapClusterMode, setMapClusterMode] = useState(false);
+  const [mapPinStats, setMapPinStats] = useState({
+    renderedPins: null,
+    mapPinPositions: null,
+    colocatedStacks: 0,
+  });
+  const [mapViewport, setMapViewport] = useState(null);
+  const [fieldMode, setFieldModeState] = useState(() => isFieldMode());
+  const [discSeverityPreset, setDiscSeverityPreset] = useState('');
+  const mapRef = useRef(null);
   const [lastSyncAt, setLastSyncAt] = useState(null);
   const [discSearch, setDiscSearch] = useState('');
   const [gapsSearch, setGapsSearch] = useState('');
@@ -109,11 +133,10 @@ export default function App() {
   const [insightDays, setInsightDays] = useState(90);
   const [insightData, setInsightData] = useState({ top: [], ghosts: [], summary: null });
   const [oppOpen, setOppOpen] = useState(false);
-  const [legendOpen, setLegendOpen] = useState(() => (
-    typeof window !== 'undefined' ? window.matchMedia('(min-width: 901px)').matches : true
-  ));
+  const [legendOpen, setLegendOpen] = useState(false);
   const [markerStyle, setMarkerStyle] = useState(DEFAULT_MARKER_STYLE);
   const [flyRequest, setFlyRequest] = useState(null);
+  const [zoomNudge, setZoomNudge] = useState(null);
   const [me, setMe] = useState(null);
   const [loginError, setLoginError] = useState(null);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -166,6 +189,22 @@ export default function App() {
 
   useEffect(() => {
     if (authState !== 'ok') return undefined;
+    const shared = decodeShareHash(typeof window !== 'undefined' ? window.location.hash : '');
+    if (shared?.v === 1) {
+      if (Array.isArray(shared.layers) && shared.layers.length) {
+        setActive(new Set(shared.layers));
+      }
+      if (shared.insight) setInsightMode(shared.insight);
+      if (shared.days) setInsightDays(shared.days);
+      if (shared.center?.length === 2 && shared.zoom != null) {
+        setFlyRequest({
+          lat: shared.center[1],
+          lng: shared.center[0],
+          zoom: shared.zoom,
+          nonce: Date.now(),
+        });
+      }
+    }
     setOptionsError(null);
     fetchFiltersCached()
       .then((o) => {
@@ -233,6 +272,7 @@ export default function App() {
       setSelected(null);
       setOppOpen(false);
       setMapMenu(null);
+      setLegendOpen(false);
       setMoreOpen(false);
     }
     setPanelOpen(next);
@@ -251,6 +291,36 @@ export default function App() {
     else if (typeof window !== 'undefined' && window.matchMedia('(min-width: 901px)').matches) {
       setOppOpen(true);
     }
+  };
+
+  const toggleFieldMode = (on) => {
+    setFieldModeState(on);
+    setFieldMode(on);
+    if (on && !['map', 'routes'].includes(tab)) setTab('map');
+  };
+
+  const mapSnapshot = () => {
+    const data = mapRef.current?.exportPng?.();
+    if (!data) return;
+    const a = document.createElement('a');
+    a.href = data;
+    a.download = `circolife-map-${Date.now()}.png`;
+    a.click();
+  };
+
+  const copyMapShareLink = async () => {
+    const vp = mapRef.current?.getViewport?.() || mapViewport;
+    const hash = encodeShareHash(packMapView({
+      active,
+      insightMode,
+      insightDays,
+      center: vp?.center,
+      zoom: vp?.zoom,
+    }));
+    const url = `${window.location.origin}${window.location.pathname}${hash}`;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch { /* */ }
   };
 
   const openDiscForRecord = (p) => {
@@ -286,7 +356,11 @@ export default function App() {
   };
 
   const activeFilters = activeFilterEntries(filters);
-  const visibleTabs = TABS.filter((t) => t.id !== 'admin' || me?.admin);
+  const visibleTabs = TABS.filter((t) => {
+    if (t.id === 'admin' && !me?.admin) return false;
+    if (fieldMode && !['map', 'routes', 'help'].includes(t.id)) return false;
+    return true;
+  });
   const moreTabs = visibleTabs.filter((t) => !['map', 'activity', 'routes'].includes(t.id));
 
   if (shareToken || authState === 'share') {
@@ -314,7 +388,7 @@ export default function App() {
   }
 
   return (
-    <div className={`app-shell ${tab === 'map' ? 'is-map' : 'is-page'}`}>
+    <div className={`app-shell ${tab === 'map' ? 'is-map' : 'is-page'}${fieldMode ? ' is-field' : ''}`}>
       <div className="top-chrome">
         <BrandMark />
         <nav className="app-tabs" aria-label="Views">
@@ -322,6 +396,7 @@ export default function App() {
             <button
               key={t.id}
               type="button"
+              data-tab={t.id}
               className={`app-tab ${tab === t.id ? 'on' : ''}`}
               aria-pressed={tab === t.id}
               onClick={() => setTabAndClose(t.id)}
@@ -342,6 +417,21 @@ export default function App() {
               <div className="account-email">{me.email}</div>
               <div className="account-role">{me.admin ? 'Admin' : 'User'}</div>
               <p className="muted" style={{ margin: 0, fontSize: 12 }}>Signed in with your Circolife Zoho account</p>
+              <div className="account-menu-tools">
+                <button type="button" className="btn ghost sm" onClick={copyMapShareLink}>
+                  Copy map link
+                </button>
+                <button type="button" className="btn ghost sm" onClick={mapSnapshot}>
+                  Map snapshot
+                </button>
+                <button
+                  type="button"
+                  className={`btn ghost sm${fieldMode ? ' on' : ''}`}
+                  onClick={() => toggleFieldMode(!fieldMode)}
+                >
+                  {fieldMode ? 'Field mode on' : 'Field mode'}
+                </button>
+              </div>
               <button type="button" className="btn ghost sm" onClick={doLogout}>
                 Log out
               </button>
@@ -384,9 +474,45 @@ export default function App() {
 
         <BrandMark compact product="" className="map-brand-chip" />
         {tab === 'map' && formatSyncAge(lastSyncAt) && (
-          <div className="map-sync-chip" role="status" title={lastSyncAt || ''}>
+          <div
+            className={`map-sync-chip ${syncAgeClass(lastSyncAt)}`}
+            role="status"
+            title={lastSyncAt || ''}
+          >
             {formatSyncAge(lastSyncAt)}
           </div>
+        )}
+
+        {tab === 'map' && (
+          <>
+            <button
+              type="button"
+              className={`map-info-fab${legendOpen ? ' open' : ''}`}
+              aria-expanded={legendOpen}
+              aria-label="Map legend and precision"
+              title="Map legend"
+              onClick={() => { setLegendOpen((v) => !v); setMapMenu(null); }}
+            >
+              i
+            </button>
+            {legendOpen && (
+              <div className="map-legend-popover" role="dialog" aria-label="Legend">
+                <button
+                  type="button"
+                  className="map-legend-close"
+                  aria-label="Close legend"
+                  onClick={() => setLegendOpen(false)}
+                >
+                  ×
+                </button>
+                <MapLegend
+                  insightMode={insightMode}
+                  selectedRm={selectedRm}
+                  showBdmVisits={Boolean(selectedRm && bdmPincodes.length > 0)}
+                />
+              </div>
+            )}
+          </>
         )}
 
         <div className="map-mobile-tray">
@@ -410,21 +536,23 @@ export default function App() {
               />
             </div>
           )}
-          <div className="map-chrome-docks">
-            <LayerDock
-              active={active}
-              toggle={toggle}
-              counts={counts}
-              filteredCounts={filteredCounts}
-            />
-            <InsightDock
-              mode={insightMode}
-              days={insightDays}
-              onMode={pickInsight}
-              onDays={setInsightDays}
-              summary={insightData.summary}
-            />
-          </div>
+          <MapChromeShell
+            active={active}
+            toggle={toggle}
+            counts={counts}
+            filteredCounts={filteredCounts}
+            insightMode={insightMode}
+            insightDays={insightDays}
+            pickInsight={pickInsight}
+            setInsightDays={setInsightDays}
+            insightSummary={insightData.summary}
+            mapRecordTotal={mapRecordTotal}
+            mapClusterMode={mapClusterMode}
+            mapPinStats={mapPinStats}
+            mapTruncatedLayers={mapTruncatedLayers}
+            onZoomNudge={() => setZoomNudge({ delta: 1.5, nonce: Date.now() })}
+            activeLayerCount={active.size}
+          />
           <div className="map-bottom-tools">
             <FilterPanel
               options={options}
@@ -461,37 +589,15 @@ export default function App() {
               aria-expanded={mapMenu === 'legend'}
               onClick={() => setMapMenu((m) => (m === 'legend' ? null : 'legend'))}
             >
-              <IconLegend />
-              <span>Legend</span>
+              <IconInfo />
+              <span>Info</span>
             </button>
-            <details
-              className="map-legend"
-              open={legendOpen}
-              onToggle={(e) => setLegendOpen(e.currentTarget.open)}
-            >
-              <summary className="map-legend-toggle">Legend</summary>
-              <div className="map-legend-body">
-                <MapLegend
-                  insightMode={insightMode}
-                  selectedRm={selectedRm}
-                  showBdmVisits={Boolean(selectedRm && bdmPincodes.length > 0)}
-                />
-              </div>
-            </details>
           </div>
         </div>
 
         <div className={`map-status ${loading ? 'show' : ''}`} aria-live="polite">
           Refreshing map…
         </div>
-        {tab === 'map' && mapRecordTotal != null && (
-          <div className="map-record-total" role="status">
-            {mapTruncatedLayers.length > 0
-              ? `${mapRecordTotal.toLocaleString('en-IN')} in view (pins capped ~8k for ${mapTruncatedLayers.join(', ')})`
-              : `Showing ${mapRecordTotal.toLocaleString('en-IN')} record${mapRecordTotal === 1 ? '' : 's'} in view`}
-          </div>
-        )}
-
         {tab === 'map' && activeFilters.length > 0 && (
           <div className="map-filter-chips" aria-label="Active filters">
             {activeFilters.map(([k, v]) => (
@@ -521,15 +627,27 @@ export default function App() {
           </div>
         )}
 
+        <MapCoach />
+
         <MapView
+          ref={mapRef}
           active={active}
           filters={filters}
           bdmPincodes={bdmPincodes}
+          onViewportChange={setMapViewport}
           onFilteredCounts={(payload) => {
             setFilteredCounts(payload?.counts || null);
             setMapRecordTotal(payload?.total ?? null);
           }}
-          onViewMeta={(meta) => setMapTruncatedLayers(meta?.truncatedLayers || [])}
+          onViewMeta={(meta) => {
+            setMapTruncatedLayers(meta?.truncatedLayers || []);
+            setMapClusterMode(Boolean(meta?.clusterMode));
+            setMapPinStats({
+              renderedPins: meta?.renderedPins ?? null,
+              mapPinPositions: meta?.mapPinPositions ?? null,
+              colocatedStacks: meta?.colocatedStacks ?? 0,
+            });
+          }}
           onSelect={(p) => {
             setSelected(p);
             if (p) setOppOpen(false);
@@ -543,6 +661,8 @@ export default function App() {
           onInsight={setInsightData}
           flyRequest={flyRequest}
           onFlyHandled={() => setFlyRequest(null)}
+          zoomNudge={zoomNudge}
+          onZoomNudgeHandled={() => setZoomNudge(null)}
           markerStyle={markerStyle}
         />
 
@@ -564,13 +684,19 @@ export default function App() {
           onClose={() => setSelected(null)}
           onViewSources={openDiscForRecord}
           onViewGaps={openGapsForRecord}
+          isAdmin={Boolean(me?.admin)}
+          onPinUpdated={(next) => setSelected(next)}
         />
       </div>
 
       {tab === 'activity' && <ActivityPanel options={options} />}
       {tab === 'routes' && <RoutesPanel options={options} />}
       {tab === 'disc' && (
-        <DiscrepanciesPanel onFocusMap={focusFromGap} initialSearch={discSearch} />
+        <DiscrepanciesPanel
+          onFocusMap={focusFromGap}
+          initialSearch={discSearch}
+          initialSeverity={discSeverityPreset}
+        />
       )}
       {tab === 'gaps' && (
         <GapsPanel onFocusMap={focusFromGap} initialSearch={gapsSearch} />
@@ -588,6 +714,7 @@ export default function App() {
         moreTabs={moreTabs}
         me={me}
         onLogout={doLogout}
+        fieldMode={fieldMode}
       />
     </div>
   );

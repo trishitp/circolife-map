@@ -16,9 +16,10 @@ const MORE_ICONS = {
 };
 
 export default function MobileNav({
-  tab, onTab, moreOpen, setMoreOpen, moreTabs, me, onLogout,
+  tab, onTab, moreOpen, setMoreOpen, moreTabs, me, onLogout, fieldMode,
 }) {
-  const primary = PRIMARY.some((t) => t.id === tab);
+  const navPrimary = fieldMode ? PRIMARY.filter((t) => t.id !== 'activity') : PRIMARY;
+  const primary = navPrimary.some((t) => t.id === tab);
 
   const go = (id) => {
     setMoreOpen(false);
@@ -28,7 +29,7 @@ export default function MobileNav({
   return (
     <>
       <nav className="mobile-nav" aria-label="App">
-        {PRIMARY.map((t) => (
+        {navPrimary.map((t) => (
           <button
             key={t.id}
             type="button"

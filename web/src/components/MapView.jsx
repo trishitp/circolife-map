@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import maplibregl from 'maplibre-gl';
 import Supercluster from 'supercluster';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import {
   fetchLayer, fetchLayersBatch, fetchLayerFeature, fetchCoverageGrid, fetchLayerCounts,
+  fetchRelatedAssets,
 } from '../lib/api';
 import { tagMeetingVisitZone } from '../lib/pincode.js';
 import { meetingPinIconLayout } from '../lib/acIcon.js';
@@ -15,6 +16,7 @@ import {
 import { loadMapIcons } from '../lib/acIcon';
 import { normalizeMarkerStyle } from '../lib/mapMarkerStyle';
 import { isAreaPrecision, selectionColors } from '../lib/precisionUi';
+import { spreadColocatedFeatures, countUniqueCoords } from '../lib/mapSpread';
 
 maplibregl.setWorkerUrl('/maplibre-worker.js');
 
@@ -96,18 +98,20 @@ function paintSelectionPoint(m, lng, lat, precision) {
   });
 }
 
-function applyMarkerStyle(m, style) {
+function applyMarkerStyle(m, style, clusterOverlay = false) {
   const s = normalizeMarkerStyle(style);
   const showHeat = s === 'pins-heat' || s === 'heat';
-  const showClusters = s === 'clusters';
+  const showClusters = s === 'clusters' || clusterOverlay;
   const vis = (on) => (on ? 'visible' : 'none');
   for (const layer of Object.keys(LAYER_COLORS)) {
     if (m.getLayer(`${layer}-heat`)) {
-      m.setLayoutProperty(`${layer}-heat`, 'visibility', vis(showHeat));
+      const heatOn = showHeat && !clusterOverlay;
+      m.setLayoutProperty(`${layer}-heat`, 'visibility', vis(heatOn));
     }
     if (m.getLayer(`${layer}-pts`)) {
       m.setLayoutProperty(`${layer}-pts`, 'visibility', 'visible');
-      try { m.setLayerZoomRange(`${layer}-pts`, s === 'heat' ? 11 : 0, 24); } catch { /* */ }
+      const minZoom = s === 'heat' ? 11 : (clusterOverlay ? 12 : 0);
+      try { m.setLayerZoomRange(`${layer}-pts`, minZoom, 24); } catch { /* */ }
     }
     for (const id of [`${layer}-halo`, `${layer}-clusters`, `${layer}-cluster-icon`]) {
       if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', vis(showClusters));
@@ -341,11 +345,14 @@ function ensureCoverage(m, wired, onSelect) {
   }
 }
 
-export default function MapView({
+const MapView = forwardRef(function MapView({
   active, filters, onSelect, onLoading, focusRequest, onFocusHandled, visible,
-  onMapIssue, insight, onInsight, flyRequest, onFlyHandled, markerStyle,
+  onMapIssue, insight, onInsight, flyRequest, onFlyHandled, zoomNudge, onZoomNudgeHandled,
+  onViewportChange,
+  markerStyle,
   bdmPincodes, onFilteredCounts, onViewMeta,
-}) {
+  accountAssetScope, onAccountScopeLoaded,
+}, ref) {
   const el = useRef(null);
   const map = useRef(null);
   const debounce = useRef(null);
@@ -371,6 +378,16 @@ export default function MapView({
   const bdmPincodeSetRef = useRef(null);
   const onFilteredCountsRef = useRef(onFilteredCounts);
   const onViewMetaRef = useRef(onViewMeta);
+  const truncRef = useRef([]);
+  const viewStatsRef = useRef({
+    renderedPins: 0,
+    colocatedStacks: 0,
+    mapPinPositions: 0,
+    clusterMode: false,
+  });
+  const onViewportRef = useRef(onViewportChange);
+  const accountAssetScopeRef = useRef(accountAssetScope);
+  const onAccountScopeLoadedRef = useRef(onAccountScopeLoaded);
   activeRef.current = active;
   filtersRef.current = filters;
   onSelectRef.current = onSelect;
@@ -383,6 +400,9 @@ export default function MapView({
   styleRef.current = normalizeMarkerStyle(markerStyle);
   onFilteredCountsRef.current = onFilteredCounts;
   onViewMetaRef.current = onViewMeta;
+  onViewportRef.current = onViewportChange;
+  accountAssetScopeRef.current = accountAssetScope;
+  onAccountScopeLoadedRef.current = onAccountScopeLoaded;
   bdmPincodeSetRef.current = Array.isArray(bdmPincodes) && bdmPincodes.length
     ? new Set(bdmPincodes)
     : null;
@@ -396,29 +416,97 @@ export default function MapView({
     } catch { /* style not ready */ }
   };
 
+  useImperativeHandle(ref, () => ({
+    exportPng: () => {
+      try {
+        return map.current?.getCanvas()?.toDataURL('image/png') || null;
+      } catch {
+        return null;
+      }
+    },
+    getViewport: () => {
+      const m = map.current;
+      if (!m) return null;
+      const c = m.getCenter();
+      const b = m.getBounds();
+      return {
+        center: [c.lng, c.lat],
+        zoom: m.getZoom(),
+        bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
+      };
+    },
+  }), []);
+
+  const shouldAutoCluster = (m) => {
+    if (!m) return false;
+    const z = m.getZoom();
+    if (truncRef.current.length > 0) return z < 12.5;
+    return z < 10.5;
+  };
+
+  const prepareLayerFeatures = (layer, raw, zoom) => {
+    if (!raw?.length) return { features: [], stacks: 0, uniqueBefore: 0 };
+    const uniqueBefore = countUniqueCoords(raw);
+    const spreadLayers = new Set(['assets', 'leads', 'accounts', 'meetings']);
+    if (!spreadLayers.has(layer)) return { features: raw, stacks: 0, uniqueBefore };
+    const { features, stacks } = spreadColocatedFeatures(raw, zoom);
+    return { features, stacks, uniqueBefore };
+  };
+
+  const emitViewport = () => {
+    const m = map.current;
+    if (!m || !ready.current) return;
+    const c = m.getCenter();
+    const b = m.getBounds();
+    onViewportRef.current?.({
+      center: [c.lng, c.lat],
+      zoom: m.getZoom(),
+      bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
+    });
+  };
+
   const pushDisplay = () => {
     const m = map.current;
     if (!m || !ready.current) return;
-    const clustered = styleRef.current === 'clusters';
+    const styleCluster = styleRef.current === 'clusters';
+    let hasColocated = false;
+    for (const layer of Object.keys(LAYER_COLORS)) {
+      if (!activeRef.current.has(layer)) continue;
+      const rawIn = featsRef.current[layer] || [];
+      if (rawIn.length >= 2 && countUniqueCoords(rawIn) < rawIn.length) {
+        hasColocated = true;
+        break;
+      }
+    }
+    const autoCluster = shouldAutoCluster(m) && !hasColocated;
+    const clustered = styleCluster || autoCluster;
+    applyMarkerStyle(m, styleRef.current, autoCluster && !styleCluster);
     const z = Math.max(0, Math.floor(m.getZoom()));
     let bbox = null;
     if (clustered) {
       const b = m.getBounds();
       bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
     }
+    let colocatedStacks = 0;
+    let renderedPins = 0;
+    let mapPinPositions = 0;
     for (const layer of Object.keys(LAYER_COLORS)) {
-      const raw = activeRef.current.has(layer) ? (featsRef.current[layer] || []) : [];
+      const rawIn = activeRef.current.has(layer) ? (featsRef.current[layer] || []) : [];
+      const { features: raw, stacks } = prepareLayerFeatures(layer, rawIn, m.getZoom());
+      colocatedStacks += stacks;
+      if (activeRef.current.has(layer)) {
+        renderedPins += raw.length;
+        mapPinPositions += countUniqueCoords(raw);
+      }
       if (!clustered || !raw.length) {
         indexes.current[layer] = null;
         m.getSource(layer)?.setData({ type: 'FeatureCollection', features: raw });
         continue;
       }
-      let index = indexes.current[layer];
-      if (!index) {
-        index = new Supercluster({ radius: 58, maxZoom: 15, minPoints: 2 });
-        index.load(raw);
-        indexes.current[layer] = index;
-      }
+      indexes.current[layer] = null;
+      const index = new Supercluster({ radius: 58, maxZoom: 15, minPoints: 2 });
+      index.load(raw);
+      indexes.current[layer] = index;
       const features = index.getClusters(bbox, z).map((f) => {
         if (!f.properties?.cluster) return f;
         return {
@@ -434,6 +522,12 @@ export default function MapView({
       });
       m.getSource(layer)?.setData({ type: 'FeatureCollection', features });
     }
+    viewStatsRef.current = {
+      renderedPins,
+      colocatedStacks,
+      mapPinPositions,
+      clusterMode: clustered,
+    };
   };
 
   const refresh = () => {
@@ -461,7 +555,9 @@ export default function MapView({
             m.getSource(layer)?.setData({ type: 'FeatureCollection', features: [] });
           }
         }
+        const scoped = accountAssetScopeRef.current?.accountIds?.length;
         const applyLayerPayload = (layer, gj) => {
+          if (scoped && (layer === 'assets' || layer === 'accounts')) return;
           if (gj?.meta?.truncated) truncLayers.push(layer);
           let feats = (gj.features || []).filter((f) =>
             f?.geometry?.type === 'Point' && Array.isArray(f.geometry.coordinates));
@@ -552,7 +648,12 @@ export default function MapView({
           onInsightRef.current?.({ top: [], ghosts: [], summary: null });
         }
         if (!ac.signal.aborted) {
-          pushDisplay();
+          const scoped = accountAssetScopeRef.current?.accountIds?.length;
+          if (scoped && activeRef.current.has('assets')) {
+            await loadAccountScope(ac);
+          } else {
+            pushDisplay();
+          }
           applyMeetingPinLayout();
           clearTimeout(countDebounce.current);
           countDebounce.current = setTimeout(async () => {
@@ -578,7 +679,19 @@ export default function MapView({
               }
             }
           }, 450);
-          onViewMetaRef.current?.({ truncatedLayers: truncLayers });
+          truncRef.current = truncLayers;
+          const loadedFeatures = activeLayers.reduce(
+            (sum, layer) => sum + (featsRef.current[layer]?.length || 0),
+            0,
+          );
+          onViewMetaRef.current?.({
+            truncatedLayers: truncLayers,
+            clusterMode: viewStatsRef.current.clusterMode,
+            renderedPins: viewStatsRef.current.renderedPins,
+            mapPinPositions: viewStatsRef.current.mapPinPositions,
+            colocatedStacks: viewStatsRef.current.colocatedStacks,
+            loadedFeatures,
+          });
           if (loadIssues.length) {
             onMapIssueRef.current?.({
               type: 'error',
@@ -588,6 +701,11 @@ export default function MapView({
             onMapIssueRef.current?.({
               type: 'warn',
               message: `Zoom in — ${truncLayers.join(', ')} capped at ~8,000 each (newest first)`,
+            });
+          } else if (loadedFeatures > 0 && viewStatsRef.current.colocatedStacks > 0) {
+            onMapIssueRef.current?.({
+              type: 'warn',
+              message: `${loadedFeatures} ACs share pincode areas — pins are fanned out here (approximate).`,
             });
           } else {
             onMapIssueRef.current?.(null);
@@ -671,13 +789,16 @@ export default function MapView({
               m.getSource('selection')?.setData({ type: 'FeatureCollection', features: [] });
             }
           });
-          m.on('moveend', refresh);
+          m.on('moveend', () => {
+            refresh();
+            emitViewport();
+          });
           m.on('zoom', () => {
-            if (styleRef.current !== 'clusters') return;
             if (zoomRaf.current) return;
             zoomRaf.current = requestAnimationFrame(() => {
               zoomRaf.current = null;
               pushDisplay();
+              emitViewport();
             });
           });
         }
@@ -725,7 +846,55 @@ export default function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { refresh(); }, [active, filters, insight?.mode, insight?.days, bdmPincodes]); // eslint-disable-line
+  const loadAccountScope = async (ac) => {
+    const scope = accountAssetScopeRef.current;
+    const m = map.current;
+    if (!scope?.accountIds?.length || !m || !ready.current) return;
+    if (!activeRef.current.has('assets')) return;
+    if (ac?.signal?.aborted) return;
+    try {
+      const rel = await fetchRelatedAssets({
+        accountIds: scope.accountIds.join(','),
+      }, { signal: ac?.signal });
+      if (ac?.signal?.aborted) return;
+      if (accountAssetScopeRef.current !== scope) return;
+      featsRef.current.assets = (rel.features || []).filter(
+        (f) => f?.geometry?.type === 'Point',
+      );
+      if (activeRef.current.has('accounts')) {
+        featsRef.current.accounts = (rel.accountFeatures || []).filter(
+          (f) => f?.geometry?.type === 'Point',
+        );
+      }
+      indexes.current.assets = null;
+      indexes.current.accounts = null;
+      pushDisplay();
+      if (rel.bounds?.length === 4) {
+        const spread = Math.max(
+          rel.bounds[2] - rel.bounds[0],
+          rel.bounds[3] - rel.bounds[1],
+        );
+        m.fitBounds(
+          [[rel.bounds[0], rel.bounds[1]], [rel.bounds[2], rel.bounds[3]]],
+          {
+            padding: 72,
+            duration: 850,
+            maxZoom: spread > 8 ? 5.5 : spread > 2 ? 8 : 13,
+          },
+        );
+      }
+      onAccountScopeLoadedRef.current?.({
+        assetCount: rel.assetCount,
+        accountCount: rel.accountCount,
+        accountIds: rel.accountIds,
+        rolledUp: rel.rolledUp,
+      });
+    } catch (e) {
+      console.warn('[account scope]', e);
+    }
+  };
+
+  useEffect(() => { refresh(); }, [active, filters, insight?.mode, insight?.days, bdmPincodes, accountAssetScope?.nonce]); // eslint-disable-line
 
   useEffect(() => {
     applyMeetingPinLayout();
@@ -737,7 +906,7 @@ export default function MapView({
   useEffect(() => {
     const m = map.current;
     if (!m || !ready.current) return;
-    applyMarkerStyle(m, markerStyle);
+    applyMarkerStyle(m, markerStyle, shouldAutoCluster(m));
     indexes.current = {};
     pushDisplay();
   }, [markerStyle]); // eslint-disable-line
@@ -816,6 +985,18 @@ export default function MapView({
     onFlyHandledRef.current?.();
   }, [flyRequest]);
 
+  useEffect(() => {
+    if (!zoomNudge?.nonce) return;
+    const m = map.current;
+    if (!m || !ready.current) return;
+    const delta = Number(zoomNudge.delta) || 1.5;
+    m.easeTo({
+      zoom: Math.min(18, m.getZoom() + delta),
+      duration: 450,
+    });
+    onZoomNudgeHandled?.();
+  }, [zoomNudge, onZoomNudgeHandled]);
+
   useEffect(() => onSelection((p) => {
     const m = map.current;
     if (!m?.getSource('selection')) return;
@@ -827,4 +1008,6 @@ export default function MapView({
   }), []);
 
   return <div id="map" ref={el} role="application" aria-label="Circolife Maps" />;
-}
+});
+
+export default MapView;

@@ -62,6 +62,16 @@ export function IconLegend({ size = 20 }) {
   );
 }
 
+export function IconInfo({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 11v6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="12" cy="8" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function IconAc({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
