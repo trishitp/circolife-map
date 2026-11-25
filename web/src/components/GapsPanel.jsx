@@ -14,7 +14,7 @@ function toCsv(rows) {
   return [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n');
 }
 
-export default function GapsPanel({ onFocusMap }) {
+export default function GapsPanel({ onFocusMap, initialSearch = '' }) {
   const [summary, setSummary] = useState(null);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -26,6 +26,14 @@ export default function GapsPanel({ onFocusMap }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const limit = 100;
+
+  useEffect(() => {
+    if (initialSearch && initialSearch !== q) {
+      setQ(initialSearch);
+      setQDebounced(initialSearch);
+      setOffset(0);
+    }
+  }, [initialSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q), 300);

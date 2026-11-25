@@ -19,6 +19,7 @@ import OpportunityPanel from './components/OpportunityPanel';
 import MobileNav from './components/MobileNav';
 import BrandMark from './components/BrandMark';
 import AppLoader from './components/AppLoader';
+import MapLegend from './components/MapLegend';
 import { IconInsights, IconLegend, IconZones } from './components/icons';
 import {
   fetchStats, fetchFiltersCached, fetchAuthStatus, fetchMe, login, logout, getAppToken,
@@ -59,6 +60,17 @@ function accountInitials(name, email) {
   return e ? e[0].toUpperCase() : '•';
 }
 
+function formatSyncAge(iso) {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  const hrs = (Date.now() - t) / 3600000;
+  if (hrs < 1) return 'Synced just now';
+  if (hrs < 24) return `Synced ${Math.round(hrs)}h ago`;
+  const days = Math.round(hrs / 24);
+  return `Synced ${days}d ago`;
+}
+
 function parseShareToken() {
   if (typeof window === 'undefined') return null;
   const hash = (window.location.hash || '').replace(/^#/, '');
@@ -73,7 +85,7 @@ export default function App() {
   const [shareToken] = useState(() => parseShareToken());
   const [authState, setAuthState] = useState(() => (shareToken ? 'share' : 'loading'));
   const [tab, setTab] = useState('map');
-  const [active, setActive] = useState(new Set(['leads', 'meetings']));
+  const [active, setActive] = useState(new Set(['assets']));
   const [filters, setFilters] = useState(() => loadLastFilters());
   const [options, setOptions] = useState({
     owners: [], ownerDetails: [], roles: [], sources: [],
@@ -83,6 +95,10 @@ export default function App() {
   const [counts, setCounts] = useState({});
   const [filteredCounts, setFilteredCounts] = useState(null);
   const [mapRecordTotal, setMapRecordTotal] = useState(null);
+  const [mapTruncatedLayers, setMapTruncatedLayers] = useState([]);
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+  const [discSearch, setDiscSearch] = useState('');
+  const [gapsSearch, setGapsSearch] = useState('');
   const [bdmPincodes, setBdmPincodes] = useState([]);
   const [selected, setSelected] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -165,6 +181,7 @@ export default function App() {
           precisions: o.precisions || [],
         });
         if (o.markerStyle) setMarkerStyle(normalizeMarkerStyle(o.markerStyle));
+        if (o.lastSuccessfulSyncAt) setLastSyncAt(o.lastSuccessfulSyncAt);
       })
       .catch((e) => {
         setOptionsError(e.message || 'Could not load filter options');
@@ -234,6 +251,22 @@ export default function App() {
     else if (typeof window !== 'undefined' && window.matchMedia('(min-width: 901px)').matches) {
       setOppOpen(true);
     }
+  };
+
+  const openDiscForRecord = (p) => {
+    const q = p?.id || p?.title || '';
+    setDiscSearch(String(q));
+    setTab('disc');
+    setSelected(null);
+    setPanelOpen(false);
+  };
+
+  const openGapsForRecord = (p) => {
+    const q = p?.id || p?.title || '';
+    setGapsSearch(String(q));
+    setTab('gaps');
+    setSelected(null);
+    setPanelOpen(false);
   };
 
   const focusFromGap = ({ layer, sourceId }) => {
@@ -350,6 +383,11 @@ export default function App() {
         )}
 
         <BrandMark compact product="" className="map-brand-chip" />
+        {tab === 'map' && formatSyncAge(lastSyncAt) && (
+          <div className="map-sync-chip" role="status" title={lastSyncAt || ''}>
+            {formatSyncAge(lastSyncAt)}
+          </div>
+        )}
 
         <div className="map-mobile-tray">
           {mapMenu === 'insights' && (
@@ -365,42 +403,11 @@ export default function App() {
           )}
           {mapMenu === 'legend' && (
             <div className="map-tool-sheet map-tool-sheet-legend" role="dialog" aria-label="Legend">
-              {insightMode === 'off' ? (
-                <>
-                  <strong>Reach</strong>
-                  <div className="legend-row"><span className="legend-swatch heat-cool" /> Heat = density of real locations</div>
-                  <div className="legend-row"><span className="legend-swatch exact" /> Pins stay on the actual spot</div>
-                  <strong>Precision</strong>
-                  <div className="legend-row"><span className="legend-swatch exact" /> Exact / geocoded</div>
-                  <div className="legend-row"><span className="legend-swatch approx" /> Check-in (~1 km)</div>
-                  <div className="legend-row"><span className="legend-swatch pincode" /> Pincode / territory</div>
-                  <div className="legend-row"><span className="legend-swatch inherited" /> Inherited</div>
-                  {selectedRm && bdmPincodes.length > 0 && (
-                    <>
-                      <strong>Visits ({selectedRm})</strong>
-                      <div className="legend-row"><span className="legend-swatch visit-in" /> Assigned pincode</div>
-                      <div className="legend-row"><span className="legend-swatch visit-out" /> Outside assigned pincode</div>
-                    </>
-                  )}
-                </>
-              ) : insightMode === 'heat' ? (
-                <>
-                  <strong>Visit heat</strong>
-                  <div className="legend-row"><span className="legend-swatch heat-cool" /> Quiet</div>
-                  <div className="legend-row"><span className="legend-swatch heat-hot" /> Heavy check-ins</div>
-                </>
-              ) : (
-                <>
-                  <strong>{insightMode === 'untouched' ? 'Untouched' : 'Coverage'}</strong>
-                  <div className="legend-row"><span className="legend-swatch zone-untouched" /> Leads, no visits</div>
-                  {insightMode === 'coverage' && (
-                    <>
-                      <div className="legend-row"><span className="legend-swatch zone-thin" /> Thin vs leads</div>
-                      <div className="legend-row"><span className="legend-swatch zone-covered" /> Covered</div>
-                    </>
-                  )}
-                </>
-              )}
+              <MapLegend
+                insightMode={insightMode}
+                selectedRm={selectedRm}
+                showBdmVisits={Boolean(selectedRm && bdmPincodes.length > 0)}
+              />
             </div>
           )}
           <div className="map-chrome-docks">
@@ -464,42 +471,11 @@ export default function App() {
             >
               <summary className="map-legend-toggle">Legend</summary>
               <div className="map-legend-body">
-                {insightMode === 'off' ? (
-                  <>
-                    <strong>Reach</strong>
-                    <div className="legend-row"><span className="legend-swatch heat-cool" /> Heat = density of real locations</div>
-                    <div className="legend-row"><span className="legend-swatch exact" /> Pins stay on the actual spot</div>
-                    <strong>Precision</strong>
-                    <div className="legend-row"><span className="legend-swatch exact" /> Exact / geocoded</div>
-                    <div className="legend-row"><span className="legend-swatch approx" /> Check-in (~1 km)</div>
-                    <div className="legend-row"><span className="legend-swatch pincode" /> Pincode / territory</div>
-                    <div className="legend-row"><span className="legend-swatch inherited" /> Inherited</div>
-                    {selectedRm && bdmPincodes.length > 0 && (
-                      <>
-                        <strong>Visits ({selectedRm})</strong>
-                        <div className="legend-row"><span className="legend-swatch visit-in" /> Assigned pincode</div>
-                        <div className="legend-row"><span className="legend-swatch visit-out" /> Outside assigned pincode</div>
-                      </>
-                    )}
-                  </>
-                ) : insightMode === 'heat' ? (
-                  <>
-                    <strong>Visit heat</strong>
-                    <div className="legend-row"><span className="legend-swatch heat-cool" /> Quiet</div>
-                    <div className="legend-row"><span className="legend-swatch heat-hot" /> Heavy check-ins</div>
-                  </>
-                ) : (
-                  <>
-                    <strong>{insightMode === 'untouched' ? 'Untouched' : 'Coverage'}</strong>
-                    <div className="legend-row"><span className="legend-swatch zone-untouched" /> Leads, no visits</div>
-                    {insightMode === 'coverage' && (
-                      <>
-                        <div className="legend-row"><span className="legend-swatch zone-thin" /> Thin vs leads</div>
-                        <div className="legend-row"><span className="legend-swatch zone-covered" /> Covered</div>
-                      </>
-                    )}
-                  </>
-                )}
+                <MapLegend
+                  insightMode={insightMode}
+                  selectedRm={selectedRm}
+                  showBdmVisits={Boolean(selectedRm && bdmPincodes.length > 0)}
+                />
               </div>
             </details>
           </div>
@@ -510,7 +486,9 @@ export default function App() {
         </div>
         {tab === 'map' && mapRecordTotal != null && (
           <div className="map-record-total" role="status">
-            Showing {mapRecordTotal.toLocaleString('en-IN')} record{mapRecordTotal === 1 ? '' : 's'} in view
+            {mapTruncatedLayers.length > 0
+              ? `${mapRecordTotal.toLocaleString('en-IN')} in view (pins capped ~8k for ${mapTruncatedLayers.join(', ')})`
+              : `Showing ${mapRecordTotal.toLocaleString('en-IN')} record${mapRecordTotal === 1 ? '' : 's'} in view`}
           </div>
         )}
 
@@ -551,6 +529,7 @@ export default function App() {
             setFilteredCounts(payload?.counts || null);
             setMapRecordTotal(payload?.total ?? null);
           }}
+          onViewMeta={(meta) => setMapTruncatedLayers(meta?.truncatedLayers || [])}
           onSelect={(p) => {
             setSelected(p);
             if (p) setOppOpen(false);
@@ -580,13 +559,22 @@ export default function App() {
           }}
         />
 
-        <DetailCard p={selected} onClose={() => setSelected(null)} />
+        <DetailCard
+          p={selected}
+          onClose={() => setSelected(null)}
+          onViewSources={openDiscForRecord}
+          onViewGaps={openGapsForRecord}
+        />
       </div>
 
       {tab === 'activity' && <ActivityPanel options={options} />}
       {tab === 'routes' && <RoutesPanel options={options} />}
-      {tab === 'disc' && <DiscrepanciesPanel onFocusMap={focusFromGap} />}
-      {tab === 'gaps' && <GapsPanel onFocusMap={focusFromGap} />}
+      {tab === 'disc' && (
+        <DiscrepanciesPanel onFocusMap={focusFromGap} initialSearch={discSearch} />
+      )}
+      {tab === 'gaps' && (
+        <GapsPanel onFocusMap={focusFromGap} initialSearch={gapsSearch} />
+      )}
       {tab === 'admin' && me?.admin && (
         <AdminPanel me={me} markerStyle={markerStyle} onMarkerStyle={setMarkerStyle} />
       )}

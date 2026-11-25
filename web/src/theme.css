@@ -1085,6 +1085,21 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
 .legend-swatch.visit-in { background: #2563EB; }
 .legend-swatch.visit-out { background: #DC2626; }
 
+.map-sync-chip {
+  position: absolute;
+  top: 12px;
+  right: 72px;
+  z-index: 5;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: rgba(254, 249, 245, 0.92);
+  border: 1px solid var(--line);
+  pointer-events: none;
+}
+
 .map-record-total {
   position: absolute;
   top: 168px;
@@ -2107,6 +2122,14 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
 .detail-card .precision.approx { background: #CFE8D6; }
 .detail-card .precision.inherited { background: #E8D3E5; }
 .detail-card .precision.geocoded { background: #D4E8F5; }
+.detail-card .detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 14px;
+}
+.detail-card .detail-actions .cta { margin-top: 0; }
 .detail-card a.cta {
   display: inline-flex;
   align-items: center;

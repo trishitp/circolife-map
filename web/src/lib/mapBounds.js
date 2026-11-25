@@ -7,3 +7,7 @@ export const INDIA_BOUNDS = [
 export const INDIA_CENTER = [78.96, 21.5];
 export const INDIA_DEFAULT_ZOOM = 4.6;
 export const INDIA_MIN_ZOOM = 4;
+
+/** First paint on the Map tab — Thane MMR (fast load with assets-only default). */
+export const DEFAULT_MAP_CENTER = [72.9781, 19.2183];
+export const DEFAULT_MAP_ZOOM = 11.5;

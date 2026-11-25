@@ -33,11 +33,46 @@ function haversineKm(a, b) {
 /** Max distance from our pincode centroid before a provider hit is treated as wrong-city. */
 const PIN_PROXIMITY_KM = 45;
 
+const BAD_PIN_TEMPLATE = { lat: 27.2384, lng: 78.7478 };
+
+function nearCoord(a, b, eps = 0.02) {
+  return Math.abs(a.lat - b.lat) <= eps && Math.abs(a.lng - b.lng) <= eps;
+}
+
+function isNcrPincode(pin) {
+  return /^1100\d{2}$/.test(pin)
+    || /^201[0-3]\d{2}$/.test(pin)
+    || /^122\d{3}$/.test(pin)
+    || /^121\d{3}$/.test(pin);
+}
+
+/** Reject centroids that contradict known postal regions (bad rows in legacy CSV). */
+export function pinCentroidPlausible(pin, lat, lng) {
+  if (!inIndia(lat, lng)) return false;
+  if (isNcrPincode(pin)) {
+    if (nearCoord({ lat, lng }, BAD_PIN_TEMPLATE)) return false;
+    if (/^2013(0[1-9]|1[0-8])$/.test(pin)) {
+      return lat >= 28.4 && lat <= 28.85 && lng >= 77.15 && lng <= 77.65;
+    }
+    if (/^1100/.test(pin)) {
+      return lat >= 28.4 && lat <= 28.9 && lng >= 76.8 && lng <= 77.4;
+    }
+    if (/^201[012]/.test(pin)) {
+      return lat >= 28.3 && lat <= 28.85 && lng >= 77.0 && lng <= 77.7;
+    }
+    if (/^122/.test(pin)) return lat >= 28.2 && lat <= 28.65 && lng >= 76.8 && lng <= 77.2;
+    if (/^121/.test(pin)) return lat >= 28.2 && lat <= 28.6 && lng >= 77.2 && lng <= 77.5;
+  }
+  return true;
+}
+
 async function pinCentroid(pincode) {
   const pin = normalizePincode(pincode);
   if (!pin) return null;
   const c = (await q('SELECT lat,lng FROM pincode_centroids WHERE pincode=$1', [pin])).rows[0];
-  if (c && inIndia(c.lat, c.lng)) return { lat: c.lat, lng: c.lng, pincode: pin };
+  if (c && pinCentroidPlausible(pin, c.lat, c.lng)) {
+    return { lat: c.lat, lng: c.lng, pincode: pin };
+  }
   return null;
 }
 

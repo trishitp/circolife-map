@@ -14,7 +14,7 @@ import {
 import { resolvePoint, refreshTerritoryCentroids } from '../geocode/pipeline.js';
 import {
   cleanText, cleanPlace, normalizePincode, usableStreet, composeStreet,
-  buildFullAddress, parseCoords, isLowPrecisionCoord, inIndia,
+  buildFullAddress, parseCoords, isLowPrecisionCoord, inIndia, addressFingerprint,
 } from '../geocode/address.js';
 import { rebuildDiscrepancies } from '../discrepancy/engine.js';
 import { redactMacInText } from '../privacy/mac.js';
@@ -30,6 +30,29 @@ const firstPlace = (...vals) => {
   }
   return '';
 };
+
+async function loadGeoReuseMap(layer) {
+  const { rows } = await q(
+    `SELECT source_id, lat, lng, precision, extra->>'geo_fp' AS geo_fp
+     FROM map_points WHERE layer=$1`,
+    [layer],
+  );
+  return new Map(rows.map((r) => [String(r.source_id), r]));
+}
+
+function reusePlotGeo(reuseMap, sourceId, geoFp) {
+  const prev = reuseMap.get(String(sourceId));
+  if (!prev || !geoFp || prev.geo_fp !== geoFp) return null;
+  if (prev.lat == null || prev.lng == null) return null;
+  if (prev.precision === 'none') return null;
+  return { lat: prev.lat, lng: prev.lng, precision: prev.precision };
+}
+
+async function resolvePlotPoint(reuseMap, sourceId, geoFp, args) {
+  const reused = reusePlotGeo(reuseMap, sourceId, geoFp);
+  if (reused) return reused;
+  return resolvePoint(args);
+}
 
 async function upsert(p) {
   await q(`
@@ -128,6 +151,7 @@ function mmiFromRow(sLat, sLng) {
 async function syncLeads() {
   const rows = csv(await exportSql(LEADS_SQL));
   console.log(`[leads] ${rows.length} rows`);
+  const geoReuse = await loadGeoReuseMap('leads');
   // Clear non-checkin signals for leads (check-ins refresh in meetings)
   await q(`DELETE FROM location_signals WHERE entity_layer='leads' AND source <> 'checkin'`);
 
@@ -187,16 +211,26 @@ async function syncLeads() {
     ]);
     const mmi = mmiFromRow(r.s_lat, r.s_lng);
 
-    // Map pin: existing priority (MMI → street geocode → pin → territory)
-    const geo = await resolvePoint({
+    const useBilling = Boolean(billingStreet);
+    const geoFp = addressFingerprint({
       sLat: r.s_lat, sLng: r.s_lng,
-      street: billingStreet || shippingStreet,
-      street2: billingStreet ? null : shippingStreet2,
-      city: billingStreet ? billingCity : shippingCity,
-      state: billingStreet ? billingState : shippingState,
-      country: billingStreet ? billingCountry : shippingCountry,
+      street: useBilling ? billingStreet : shippingStreet,
+      street2: useBilling ? null : shippingStreet2,
+      city: useBilling ? billingCity : shippingCity,
+      state: useBilling ? billingState : shippingState,
+      country: useBilling ? billingCountry : shippingCountry,
       pincode: plotPin,
-      cityHint: (billingStreet ? billingCity : shippingCity) || territory,
+      territory,
+    });
+    const geo = await resolvePlotPoint(geoReuse, id, geoFp, {
+      sLat: r.s_lat, sLng: r.s_lng,
+      street: useBilling ? billingStreet : shippingStreet,
+      street2: useBilling ? null : shippingStreet2,
+      city: useBilling ? billingCity : shippingCity,
+      state: useBilling ? billingState : shippingState,
+      country: useBilling ? billingCountry : shippingCountry,
+      pincode: plotPin,
+      cityHint: (useBilling ? billingCity : shippingCity) || territory,
       territory,
     });
     const reason = !plotStreet && !plotPin ? 'Lead missing street and pincode'
@@ -211,7 +245,7 @@ async function syncLeads() {
       address: plotAddr,
       pincode: plotPin, ...geo,
       crmUrl: `https://crm.zoho.in/crm/tab/Leads/${id}`,
-      extra: { source: r['Lead Source'], converted: r['Is Converted'] },
+      extra: { source: r['Lead Source'], converted: r['Is Converted'], geo_fp: geoFp },
       reason,
     });
 
@@ -240,6 +274,7 @@ async function syncLeads() {
 async function syncAccounts() {
   const rows = csv(await exportSql(ACCOUNTS_SQL));
   console.log(`[accounts] ${rows.length} rows`);
+  const geoReuse = await loadGeoReuseMap('accounts');
   await q(`DELETE FROM location_signals WHERE entity_layer='accounts' AND source <> 'checkin'`);
 
   const seen = new Set();
@@ -330,7 +365,17 @@ async function syncAccounts() {
     const plotPin = billingPin || shippingPin;
     const plotAddr = billingAddr || shippingAddr || null;
     const useBilling = Boolean(composeStreet(billingStreet, billingStreet2));
-    const geo = await resolvePoint({
+    const geoFp = addressFingerprint({
+      sLat: r.s_lat, sLng: r.s_lng,
+      street: useBilling ? billingStreet : shippingStreet,
+      street2: useBilling ? billingStreet2 : shippingStreet2,
+      city: useBilling ? billingCity : shippingCity,
+      state: useBilling ? billingState : shippingState,
+      country: useBilling ? billingCountry : shippingCountry,
+      pincode: plotPin,
+      territory,
+    });
+    const geo = await resolvePlotPoint(geoReuse, id, geoFp, {
       sLat: r.s_lat, sLng: r.s_lng,
       street: useBilling ? billingStreet : shippingStreet,
       street2: useBilling ? billingStreet2 : shippingStreet2,
@@ -355,6 +400,7 @@ async function syncAccounts() {
       address: plotAddr,
       pincode: plotPin, ...geo,
       crmUrl: `https://crm.zoho.in/crm/tab/Accounts/${id}`,
+      extra: { geo_fp: geoFp },
       reason,
     });
 

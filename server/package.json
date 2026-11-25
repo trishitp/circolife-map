@@ -6,6 +6,7 @@
     "start": "node src/index.js",
     "migrate": "node src/migrate.js",
     "load:pincodes": "node scripts/load_pincodes.js data/pincodes.csv",
+    "audit:pincodes": "node scripts/audit_pincodes.js data/pincodes.csv",
     "sync": "node src/sync/sync.js",
     "sync:meeting-coords": "node scripts/refresh_meeting_coords.js",
     "sync:assets": "node scripts/sync_assets_only.js",

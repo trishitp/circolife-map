@@ -68,7 +68,9 @@ const LAYER_COLOR = {
   zone: '#c45c4a',
 };
 
-export default function DetailCard({ p, onClose }) {
+const WEAK_PRECISION = new Set(['pincode', 'territory', 'approx', 'inherited']);
+
+export default function DetailCard({ p, onClose, onViewSources, onViewGaps }) {
   useEffect(() => {
     if (!p) {
       emitSelection(null);
@@ -110,6 +112,7 @@ export default function DetailCard({ p, onClose }) {
       'Account',
       p.accountName || p.accountId,
     ],
+    p.pincode && ['PIN', String(p.pincode)],
     p.owner && ['Agent', p.owner],
     p.territory && ['Territory', p.territory],
     p.status && ['Status', p.status],
@@ -154,13 +157,23 @@ export default function DetailCard({ p, onClose }) {
               : 'Visited relative to lead density'}
         </span>
       )}
-      {(p.crmUrl || p.accountCrmUrl) && (
-        <div>
+      <div className="detail-actions">
+        {(p._layer === 'leads' || p._layer === 'accounts') && onViewSources && (
+          <button type="button" className="btn ghost sm" onClick={() => onViewSources(p)}>
+            Location sources
+          </button>
+        )}
+        {WEAK_PRECISION.has(p.precision) && onViewGaps && (
+          <button type="button" className="btn ghost sm" onClick={() => onViewGaps(p)}>
+            Improve precision
+          </button>
+        )}
+        {(p.crmUrl || p.accountCrmUrl) && (
           <a className="cta" href={p.crmUrl || p.accountCrmUrl} target="_blank" rel="noreferrer">
             {p.crmUrl ? 'Open in CRM →' : 'Open account in CRM →'}
           </a>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

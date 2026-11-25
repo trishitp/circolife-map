@@ -9,9 +9,12 @@ import { tagMeetingVisitZone } from '../lib/pincode.js';
 import { meetingPinIconLayout } from '../lib/acIcon.js';
 import { onSelection } from '../lib/selection';
 import { resolveBasemapStyle, LABEL_FONTS_BY_STYLE, attachGoogleAttribution } from '../lib/basemap';
-import { INDIA_BOUNDS, INDIA_CENTER, INDIA_DEFAULT_ZOOM, INDIA_MIN_ZOOM } from '../lib/mapBounds';
+import {
+  INDIA_BOUNDS, DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, INDIA_MIN_ZOOM,
+} from '../lib/mapBounds';
 import { loadMapIcons } from '../lib/acIcon';
 import { normalizeMarkerStyle } from '../lib/mapMarkerStyle';
+import { isAreaPrecision, selectionColors } from '../lib/precisionUi';
 
 maplibregl.setWorkerUrl('/maplibre-worker.js');
 
@@ -68,6 +71,35 @@ const PIN_OPACITY = [
   'match', ['get', 'precision'],
   'pincode', 0.55, 'territory', 0.4, 'inherited', 0.75, 1,
 ];
+
+const PIN_ICON_SCALE = [
+  'match', ['get', 'precision'],
+  'pincode', 0.88, 'territory', 0.8, 'inherited', 0.92, 1,
+];
+
+function applySelectionStyle(m, precision) {
+  if (!m?.getLayer('selection-ring')) return;
+  const { stroke, fill } = selectionColors(precision);
+  const weak = isAreaPrecision(precision);
+  m.setPaintProperty('selection-ring', 'circle-stroke-color', stroke);
+  m.setPaintProperty('selection-ring', 'circle-stroke-width', weak ? 2 : 3);
+  m.setPaintProperty('selection-ring', 'circle-radius', weak ? 22 : 17);
+  m.setPaintProperty('selection-pulse', 'circle-color', fill);
+  m.setPaintProperty('selection-pulse', 'circle-opacity', weak ? 0.22 : 0.16);
+  m.setPaintProperty('selection-pulse', 'circle-radius', weak ? 32 : 24);
+}
+
+function paintSelectionPoint(m, lng, lat, precision) {
+  applySelectionStyle(m, precision);
+  m.getSource('selection')?.setData({
+    type: 'FeatureCollection',
+    features: [{
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [Number(lng), Number(lat)] },
+      properties: { precision: precision || '' },
+    }],
+  });
+}
 
 function applyMarkerStyle(m, style) {
   const s = normalizeMarkerStyle(style);
@@ -140,7 +172,11 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
       source: srcId,
       layout: {
         'icon-image': 'ac-pin',
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 4, 0.28, 8, 0.38, 12, 0.52, 16, 0.7],
+        'icon-size': [
+          '*',
+          ['interpolate', ['linear'], ['zoom'], 4, 0.28, 8, 0.38, 12, 0.52, 16, 0.7],
+          PIN_ICON_SCALE,
+        ],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-anchor': 'center',
@@ -168,7 +204,11 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
       source: srcId,
       layout: {
         'icon-image': `drop-pin-${layer}`,
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 4, 0.32, 8, 0.42, 12, 0.58, 16, 0.78],
+        'icon-size': [
+          '*',
+          ['interpolate', ['linear'], ['zoom'], 4, 0.32, 8, 0.42, 12, 0.58, 16, 0.78],
+          PIN_ICON_SCALE,
+        ],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-anchor': 'bottom',
@@ -187,6 +227,7 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
       const [lng, lat] = f.geometry.coordinates;
       selectedId.current = f.properties.id;
       onSelect({ ...f.properties, _layer: layer, lng, lat });
+      paintSelectionPoint(m, lng, lat, f.properties.precision);
       m.easeTo({ center: f.geometry.coordinates, offset: [0, -40], duration: 450 });
     });
     const on = () => { m.getCanvas().style.cursor = 'pointer'; };
@@ -316,7 +357,7 @@ function ensureCoverage(m, wired, onSelect) {
 export default function MapView({
   active, filters, onSelect, onLoading, focusRequest, onFocusHandled, visible,
   onMapIssue, insight, onInsight, flyRequest, onFlyHandled, markerStyle,
-  bdmPincodes, onFilteredCounts,
+  bdmPincodes, onFilteredCounts, onViewMeta,
 }) {
   const el = useRef(null);
   const map = useRef(null);
@@ -342,6 +383,7 @@ export default function MapView({
   const styleRef = useRef(normalizeMarkerStyle(markerStyle));
   const bdmPincodeSetRef = useRef(null);
   const onFilteredCountsRef = useRef(onFilteredCounts);
+  const onViewMetaRef = useRef(onViewMeta);
   activeRef.current = active;
   filtersRef.current = filters;
   onSelectRef.current = onSelect;
@@ -353,6 +395,7 @@ export default function MapView({
   onFlyHandledRef.current = onFlyHandled;
   styleRef.current = normalizeMarkerStyle(markerStyle);
   onFilteredCountsRef.current = onFilteredCounts;
+  onViewMetaRef.current = onViewMeta;
   bdmPincodeSetRef.current = Array.isArray(bdmPincodes) && bdmPincodes.length
     ? new Set(bdmPincodes)
     : null;
@@ -548,6 +591,7 @@ export default function MapView({
               }
             }
           }, 450);
+          onViewMetaRef.current?.({ truncatedLayers: truncLayers });
           if (loadIssues.length) {
             onMapIssueRef.current?.({
               type: 'error',
@@ -556,7 +600,7 @@ export default function MapView({
           } else if (truncLayers.length) {
             onMapIssueRef.current?.({
               type: 'warn',
-              message: `Zoom in — ${truncLayers.join(', ')} dense in this view (showing latest only)`,
+              message: `Zoom in — ${truncLayers.join(', ')} capped at ~8,000 each (newest first)`,
             });
           } else {
             onMapIssueRef.current?.(null);
@@ -583,8 +627,8 @@ export default function MapView({
       const m = new maplibregl.Map({
         container: el.current,
         style: resolved.style,
-        center: INDIA_CENTER,
-        zoom: INDIA_DEFAULT_ZOOM,
+        center: DEFAULT_MAP_CENTER,
+        zoom: DEFAULT_MAP_ZOOM,
         minZoom: INDIA_MIN_ZOOM,
         maxZoom: 18,
         maxBounds: INDIA_BOUNDS,
@@ -762,15 +806,7 @@ export default function MapView({
           duration: 650,
           offset: [0, -40],
         });
-        // Ensure selection ring paints even if DetailCard effect raced
-        m.getSource('selection')?.setData({
-          type: 'FeatureCollection',
-          features: [{
-            type: 'Feature',
-            geometry: { type: 'Point', coordinates: [lng, lat] },
-            properties: {},
-          }],
-        });
+        paintSelectionPoint(m, lng, lat, props.precision);
       } catch (e) {
         console.warn('[map focus]', e);
       } finally {
@@ -800,14 +836,7 @@ export default function MapView({
       m.getSource('selection').setData({ type: 'FeatureCollection', features: [] });
       return;
     }
-    m.getSource('selection').setData({
-      type: 'FeatureCollection',
-      features: [{
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: [Number(p.lng), Number(p.lat)] },
-        properties: {},
-      }],
-    });
+    paintSelectionPoint(m, p.lng, p.lat, p.precision);
   }), []);
 
   return <div id="map" ref={el} role="application" aria-label="Circolife Maps" />;

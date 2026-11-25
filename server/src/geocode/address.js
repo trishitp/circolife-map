@@ -1,4 +1,5 @@
 // Address / coordinate normalization for the geocode pipeline.
+import crypto from 'node:crypto';
 
 const JUNK = /^(n\/?a|null|none|nil|undefined|-|—|na|not available|tbd)$/i;
 
@@ -156,4 +157,19 @@ export function isCoarseConfidence(confidence) {
   const c = String(confidence || '').toUpperCase();
   if (!c || c === 'UNKNOWN' || c === 'APPROXIMATE') return true;
   return !isStreetLevelConfidence(c);
+}
+
+/** Stable hash of location inputs — skip resolvePoint when CRM address unchanged. */
+export function addressFingerprint({
+  sLat, sLng, street, street2, city, state, country, pincode, territory, checkin,
+} = {}) {
+  const norm = (s) => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const payload = [
+    norm(sLat), norm(sLng),
+    norm(street), norm(street2),
+    norm(city), norm(state), norm(country),
+    norm(pincode), norm(territory),
+    norm(checkin),
+  ].join('|');
+  return crypto.createHash('sha1').update(payload).digest('hex');
 }

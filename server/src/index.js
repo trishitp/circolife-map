@@ -41,10 +41,20 @@ app.get('/healthz', async (_req, res) => {
   try {
     const { pool } = await import('./db.js');
     await pool.query('SELECT 1');
+    let lastSuccessfulSyncAt = null;
+    try {
+      const syncR = await pool.query(`
+        SELECT finished_at FROM sync_runs
+        WHERE status = 'ok' AND kind IN ('full', 'sync')
+        ORDER BY finished_at DESC NULLS LAST
+        LIMIT 1`);
+      lastSuccessfulSyncAt = syncR.rows[0]?.finished_at || null;
+    } catch { /* sync_runs may not exist yet */ }
     res.json({
       ok: true,
       auth: Boolean(cfg.appPassword),
       time: new Date().toISOString(),
+      lastSuccessfulSyncAt,
     });
   } catch (e) {
     res.status(503).json({ ok: false, error: e.message || 'db unavailable' });

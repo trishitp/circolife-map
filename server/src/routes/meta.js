@@ -299,6 +299,11 @@ meta.get('/filters', async (_req, res) => {
       statuses: statuses.rows.map((r) => r.status),
       precisions: precisions.rows.map((r) => r.precision),
       markerStyle: await getMapMarkerStyle(),
+      lastSuccessfulSyncAt: (await q(`
+        SELECT finished_at FROM sync_runs
+        WHERE status = 'ok' AND kind IN ('full', 'sync')
+        ORDER BY finished_at DESC NULLS LAST
+        LIMIT 1`)).rows[0]?.finished_at || null,
     });
   } catch (e) {
     console.error('[meta/filters]', e);

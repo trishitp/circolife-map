@@ -38,7 +38,7 @@ function fmtCoord(lat, lng) {
   return `${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`;
 }
 
-export default function DiscrepanciesPanel({ onFocusMap }) {
+export default function DiscrepanciesPanel({ onFocusMap, initialSearch = '' }) {
   const [summary, setSummary] = useState(null);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -54,6 +54,14 @@ export default function DiscrepanciesPanel({ onFocusMap }) {
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const limit = 100;
+
+  useEffect(() => {
+    if (initialSearch && initialSearch !== q) {
+      setQ(initialSearch);
+      setQDebounced(initialSearch);
+      setOffset(0);
+    }
+  }, [initialSearch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const t = setTimeout(() => setQDebounced(q), 300);
