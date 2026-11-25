@@ -9,7 +9,7 @@ import { exportSql } from '../zoho/analyticsClient.js';
 import { cfg } from '../config.js';
 import {
   LEADS_SQL, ACCOUNTS_SQL, MEETINGS_SQL, ASSETS_SQL, ASSET_PARENT_IDS_SQL, USERS_SQL,
-  FSM_ADDRESSES_SQL, FSM_COMPANIES_SQL, ACCOUNT_ADDRESS_SQL,
+  FSM_ADDRESSES_SQL, FSM_COMPANIES_SQL, ACCOUNT_ADDRESS_SQL, withModifiedSince,
 } from './extractQueries.js';
 import { resolvePoint, refreshTerritoryCentroids } from '../geocode/pipeline.js';
 import {
@@ -148,12 +148,30 @@ function mmiFromRow(sLat, sLng) {
   return { ...coords, precision: approx ? 'approx' : 'exact' };
 }
 
-async function syncLeads() {
-  const rows = csv(await exportSql(LEADS_SQL));
-  console.log(`[leads] ${rows.length} rows`);
+async function clearLayerSignals(layer, { since, ids } = {}) {
+  if (!since) {
+    await q(
+      `DELETE FROM location_signals WHERE entity_layer=$1 AND source <> 'checkin'`,
+      [layer],
+    );
+    return;
+  }
+  if (ids?.length) {
+    await q(
+      `DELETE FROM location_signals
+       WHERE entity_layer=$1 AND source <> 'checkin' AND entity_id = ANY($2::text[])`,
+      [layer, ids],
+    );
+  }
+}
+
+async function syncLeads({ since } = {}) {
+  const sql = withModifiedSince(LEADS_SQL, since, '"Modified Time"');
+  const rows = csv(await exportSql(sql));
+  console.log(`[leads] ${rows.length} rows${since ? ' (incremental)' : ''}`);
   const geoReuse = await loadGeoReuseMap('leads');
-  // Clear non-checkin signals for leads (check-ins refresh in meetings)
-  await q(`DELETE FROM location_signals WHERE entity_layer='leads' AND source <> 'checkin'`);
+  const ids = rows.map((r) => String(r.Id || '').trim()).filter(Boolean);
+  await clearLayerSignals('leads', { since, ids });
 
   let n = 0;
   await Promise.all(rows.map((r) => limit(async () => {
@@ -271,11 +289,13 @@ async function syncLeads() {
   return { layer: 'leads', rows: rows.length, processed: n };
 }
 
-async function syncAccounts() {
-  const rows = csv(await exportSql(ACCOUNTS_SQL));
-  console.log(`[accounts] ${rows.length} rows`);
+async function syncAccounts({ since } = {}) {
+  const sql = withModifiedSince(ACCOUNTS_SQL, since, 'a."Modified Time"');
+  const rows = csv(await exportSql(sql));
+  console.log(`[accounts] ${rows.length} rows${since ? ' (incremental)' : ''}`);
   const geoReuse = await loadGeoReuseMap('accounts');
-  await q(`DELETE FROM location_signals WHERE entity_layer='accounts' AND source <> 'checkin'`);
+  const ids = rows.map((r) => String(r.Id || '').trim()).filter(Boolean);
+  await clearLayerSignals('accounts', { since, ids });
 
   const seen = new Set();
   let n = 0;
@@ -425,17 +445,28 @@ async function syncAccounts() {
   return { layer: 'accounts', rows: rows.length, processed: n };
 }
 
-async function syncMeetings() {
-  const rows = csv(await exportSql(MEETINGS_SQL));
-  console.log(`[meetings] ${rows.length} rows`);
+async function syncMeetings({ since } = {}) {
+  const sql = withModifiedSince(MEETINGS_SQL, since, 'm."Modified Time"');
+  const rows = csv(await exportSql(sql));
+  console.log(`[meetings] ${rows.length} rows${since ? ' (incremental)' : ''}`);
   // Full related maps (incl. unlocated) so territory still inherits when check-in exists.
   const relatedMap = async (layer) => new Map((await q(
     `SELECT source_id, lat, lng, territory FROM map_points WHERE layer=$1`, [layer])).rows
     .map((a) => [a.source_id, a]));
   const [accs, leads] = [await relatedMap('accounts'), await relatedMap('leads')];
 
-  // Replace check-in signals each full meetings sync
-  await q(`DELETE FROM location_signals WHERE source = 'checkin'`);
+  // Replace check-in signals each full meetings sync; scoped on incremental.
+  if (!since) {
+    await q(`DELETE FROM location_signals WHERE source = 'checkin'`);
+  } else {
+    const ids = rows.map((r) => String(r.Id || '').trim()).filter(Boolean);
+    if (ids.length) {
+      await q(
+        `DELETE FROM location_signals WHERE source = 'checkin' AND entity_id = ANY($1::text[])`,
+        [ids],
+      );
+    }
+  }
 
   let n = 0;
   for (const r of rows) {
@@ -1003,6 +1034,40 @@ export async function runFullSync() {
   const durationMs = Date.now() - t;
   console.log(`sync complete in ${(durationMs / 1000).toFixed(0)}s`);
   return { durationMs, layers, discrepancies: disc };
+}
+
+/**
+ * Pull only CRM rows modified since the last successful sync (1h overlap).
+ * Falls back to a full sync when no prior successful run exists.
+ */
+export async function runIncrementalSync() {
+  const { rows } = await q(`
+    SELECT finished_at FROM sync_runs
+    WHERE status = 'ok' AND kind IN ('full', 'sync', 'incremental')
+      AND finished_at IS NOT NULL
+    ORDER BY finished_at DESC
+    LIMIT 1`);
+  const last = rows[0]?.finished_at;
+  if (!last) {
+    console.log('[sync] no prior successful run — running full sync');
+    return runFullSync();
+  }
+  const since = new Date(new Date(last).getTime() - 3600e3).toISOString();
+  const t = Date.now();
+  console.log(`[sync] incremental since ${since}`);
+  const layers = [];
+  layers.push(await syncUsers());
+  layers.push(await syncLeads({ since }));
+  await refreshTerritoryCentroids();
+  layers.push(await syncAccounts({ since }));
+  layers.push(await syncMeetings({ since }));
+  // Assets still full-pulled — FSM Modified Time filters are less reliable here.
+  layers.push(await syncAssets());
+  await refreshTerritoryCentroids();
+  const disc = await rebuildDiscrepancies();
+  const durationMs = Date.now() - t;
+  console.log(`incremental sync complete in ${(durationMs / 1000).toFixed(0)}s`);
+  return { durationMs, layers, discrepancies: disc, since, mode: 'incremental' };
 }
 
 /** Assets-only re-sync (FSM + shipping/billing fallback + clean asset numbers). */

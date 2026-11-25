@@ -98,7 +98,7 @@ export const updateAdminUser = (id, body) =>
 
 const LAYER_FILTER_KEYS = new Set([
   'owner', 'territory', 'status', 'precision', 'from', 'to', 'joint', 'limit',
-  'role', 'userStatus', 'source',
+  'role', 'userStatus', 'source', 'zoom',
 ]);
 
 function layerQuery(filters = {}) {
@@ -219,6 +219,8 @@ export const exchangeZohoCode = (code) =>
   });
 export const triggerSync = () =>
   jfetch('/api/admin/sync', { method: 'POST', body: '{}' });
+export const triggerIncrementalSync = () =>
+  jfetch('/api/admin/sync/incremental', { method: 'POST', body: '{}' });
 export const triggerAssetsSync = () =>
   jfetch('/api/admin/sync/assets', { method: 'POST', body: '{}' });
 export const triggerRegeocode = (body = {}) =>

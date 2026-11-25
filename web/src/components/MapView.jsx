@@ -116,6 +116,9 @@ function applyMarkerStyle(m, style, clusterOverlay = false) {
     for (const id of [`${layer}-halo`, `${layer}-clusters`, `${layer}-cluster-icon`]) {
       if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', vis(showClusters));
     }
+    if (m.getLayer(`${layer}-area`)) {
+      m.setLayoutProperty(`${layer}-area`, 'visibility', vis(!showClusters || s !== 'heat'));
+    }
   }
 }
 
@@ -161,6 +164,43 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
       'circle-radius': ['step', ['get', 'point_count'], 16, 25, 20, 100, 26, 500, 32, 2000, 40],
       'circle-stroke-width': 3,
       'circle-stroke-color': STROKE,
+    },
+  });
+
+  add(`${layer}-area`, {
+    id: `${layer}-area`,
+    type: 'circle',
+    source: srcId,
+    filter: [
+      'all',
+      ['!', ['has', 'point_count']],
+      ['match', ['get', 'precision'], 'pincode', true, 'territory', true, 'approx', true, false],
+    ],
+    paint: {
+      'circle-color': [
+        'match', ['get', 'precision'],
+        'approx', '#5A9B6E',
+        'territory', '#B07A28',
+        '#C98A2E',
+      ],
+      'circle-opacity': [
+        'match', ['get', 'precision'],
+        'approx', 0.28,
+        'territory', 0.18,
+        0.22,
+      ],
+      'circle-radius': [
+        'interpolate', ['linear'], ['zoom'],
+        8, ['match', ['get', 'precision'], 'approx', 10, 'territory', 14, 12],
+        14, ['match', ['get', 'precision'], 'approx', 16, 'territory', 22, 18],
+      ],
+      'circle-stroke-width': [
+        'match', ['get', 'precision'],
+        'approx', 1.5,
+        1,
+      ],
+      'circle-stroke-color': '#fff',
+      'circle-stroke-opacity': 0.55,
     },
   });
 
@@ -567,15 +607,17 @@ const MapView = forwardRef(function MapView({
           featsRef.current[layer] = feats;
           indexes.current[layer] = null;
         };
+        const zoom = m.getZoom();
+        const filtersWithZoom = { ...filtersRef.current, zoom: Math.round(zoom * 10) / 10 };
         const loadOneLayer = async (layer) => {
-          const gj = await fetchLayer(layer, wide, filtersRef.current, { signal: ac.signal });
+          const gj = await fetchLayer(layer, wide, filtersWithZoom, { signal: ac.signal });
           if (ac.signal.aborted) return;
           applyLayerPayload(layer, gj);
         };
         try {
           if (activeLayers.length >= 2) {
             try {
-              const batch = await fetchLayersBatch(wide, activeLayers, filtersRef.current, {
+              const batch = await fetchLayersBatch(wide, activeLayers, filtersWithZoom, {
                 signal: ac.signal,
               });
               if (ac.signal.aborted) return;

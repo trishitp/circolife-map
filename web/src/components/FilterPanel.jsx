@@ -361,6 +361,9 @@ export default function FilterPanel({ options, filters, setFilters, open, setOpe
 
   const createdPreset = (() => {
     if (!draft.from) return '';
+    const today = todayIST();
+    if (draft.from === today && (draft.to === today || !draft.to)) return 'today';
+    if (draft.from === daysAgo(7) && !draft.to) return '7';
     if (draft.from === daysAgo(30) && !draft.to) return '30';
     if (draft.from === daysAgo(90) && !draft.to) return '90';
     if (draft.from === yearStart() && !draft.to) return 'year';
@@ -368,7 +371,11 @@ export default function FilterPanel({ options, filters, setFilters, open, setOpe
   })();
 
   const applyCreated = (preset) => {
-    if (preset === '30') setDraft((f) => ({ ...f, from: daysAgo(30), to: '' }));
+    if (preset === 'today') {
+      const t = todayIST();
+      setDraft((f) => ({ ...f, from: t, to: t }));
+    } else if (preset === '7') setDraft((f) => ({ ...f, from: daysAgo(7), to: '' }));
+    else if (preset === '30') setDraft((f) => ({ ...f, from: daysAgo(30), to: '' }));
     else if (preset === '90') setDraft((f) => ({ ...f, from: daysAgo(90), to: '' }));
     else if (preset === 'year') setDraft((f) => ({ ...f, from: yearStart(), to: '' }));
     else setDraft((f) => ({ ...f, from: '', to: '' }));
@@ -586,6 +593,8 @@ export default function FilterPanel({ options, filters, setFilters, open, setOpe
               <h4>Recorded date</h4>
               <div className="chip-row">
                 {[
+                  ['Today', 'today'],
+                  ['7 days', '7'],
                   ['30 days', '30'],
                   ['90 days', '90'],
                   ['This year', 'year'],

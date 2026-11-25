@@ -1741,6 +1741,34 @@ button { font-family: inherit; touch-action: manipulation; -webkit-tap-highlight
   pointer-events: none;
 }
 
+.map-empty-state {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  width: min(320px, calc(100vw - 32px));
+  padding: 16px 18px;
+  text-align: center;
+  pointer-events: auto;
+}
+.map-empty-state strong {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--font-display);
+}
+.map-empty-state p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+.detail-crm-playbook {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 /* Record count lives in .map-chrome-status inside .map-chrome-docks */
 
 .insight-dock {
@@ -3211,10 +3239,116 @@ a.login-btn {
 
 /* Activity — RM day walk + multi-RM compare */
 .activity-panel { max-width: 1360px; }
+.activity-head-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
 .activity-mode-tabs {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+.field-workflow-link { white-space: nowrap; }
+.activity-range-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.activity-field-label {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.activity-compare-summary { margin: 0 0 10px; }
+.activity-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  white-space: nowrap;
+}
+.activity-mobile-list { display: none; }
+.activity-mobile-card {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.activity-mobile-card:last-child { border-bottom: 0; }
+.activity-mobile-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.activity-mobile-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+.activity-mobile-kpis dt {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.activity-mobile-kpis dd { margin: 2px 0 0; font-weight: 700; }
+.activity-mobile-card-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.walk-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  background: rgba(161, 73, 150, 0.06);
+  border: 1px solid rgba(161, 73, 150, 0.12);
+  border-radius: 12px;
+  font-size: 13px;
+}
+.activity-footnote-wrap {
+  margin-top: 20px;
+  max-width: 78ch;
+}
+.activity-footnote-toggle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+}
+.activity-footnote-wrap[open] .activity-footnote-toggle { margin-bottom: 8px; }
+.routes-advanced-tools {
+  margin: 0 0 12px;
+  padding: 10px 12px 12px;
+  border-radius: 12px;
+}
+.routes-advanced-tools > summary {
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  color: var(--ink);
+  list-style: none;
+}
+.routes-advanced-tools[open] > summary { margin-bottom: 10px; }
+.routes-advanced-tools .routes-toolbar { margin: 0; padding: 0; border: 0; }
+.routes-cta-hint { flex: 1 1 200px; font-size: 13px; }
+@media (max-width: 720px) {
+  .activity-table-wrap .activity-table { display: none; }
+  .activity-mobile-list { display: block; }
+  .activity-head-actions { align-items: stretch; width: 100%; }
+  .field-workflow-link { width: 100%; justify-content: center; }
+  .routes-toolbar-primary { margin-bottom: 0; }
 }
 .activity-toolbar {
   align-items: flex-end;
@@ -3687,11 +3821,28 @@ a.login-btn {
   text-align: left;
   border: 0;
   background: transparent;
-  padding: 10px 8px 10px 12px;
+  padding: 12px 10px 12px 12px;
   cursor: pointer;
   color: inherit;
   font: inherit;
   min-width: 0;
+  min-height: 48px;
+}
+@media (max-width: 900px) {
+  .activity-walk .walk-map {
+    height: min(48vh, 420px);
+    min-height: 260px;
+  }
+  .activity-walk .walk-timeline {
+    max-height: min(48vh, 420px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .walk-action-bar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
 }
 .walk-order {
   flex-shrink: 0;

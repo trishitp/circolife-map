@@ -53,7 +53,7 @@ function shiftDate(ymd, delta) {
   return `${yy}-${mm}-${dd}`;
 }
 
-export default function RmWalkView({ options = {}, initialOwner, initialDate }) {
+export default function RmWalkView({ options = {}, initialOwner, initialDate, onPlanRoute }) {
   const today = useMemo(() => {
     try {
       return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
@@ -178,6 +178,28 @@ export default function RmWalkView({ options = {}, initialOwner, initialDate }) 
         territory={territory}
         onTerritory={setTerritory}
       />
+
+      {owner && onPlanRoute && (
+        <div className="walk-action-bar">
+          <span className="muted">
+            Coach done?
+            {' '}
+            <strong>Plan the next day</strong>
+            {' '}
+            for
+            {' '}
+            {owner}
+            .
+          </span>
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => onPlanRoute({ owner, date })}
+          >
+            Open in Routes
+          </button>
+        </div>
+      )}
 
       {error && <p className="banner err">{error}</p>}
       {loading && <p className="muted">Loading the day’s walk…</p>}

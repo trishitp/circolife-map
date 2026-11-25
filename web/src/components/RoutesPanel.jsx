@@ -1,25 +1,46 @@
 import RoutePlanView from './RoutePlanView';
 
-export default function RoutesPanel({ options = {} }) {
+export default function RoutesPanel({
+  options = {},
+  planSeed,
+  onPlanSeedApplied,
+  onReviewDay,
+}) {
   return (
     <div className="page-panel activity-panel routes-panel">
       <div className="page-head">
         <div>
           <h1>Routes</h1>
           <p>
-            Pick an RM, add nearby drop-ins, get drive times, and share a private
-            link the field agent can open without signing in.
+            Build tomorrow’s run: meetings, nearby drop-ins, drive times, and a share link
+            for the field agent (no sign-in needed).
           </p>
         </div>
+        {onReviewDay && (
+          <button
+            type="button"
+            className="btn ghost sm field-workflow-link"
+            onClick={() => onReviewDay({})}
+          >
+            ← Review in Activity
+          </button>
+        )}
       </div>
 
-      <RoutePlanView options={options} />
+      <RoutePlanView
+        options={options}
+        planSeed={planSeed}
+        onPlanSeedApplied={onPlanSeedApplied}
+        onReviewDay={onReviewDay}
+      />
 
-      <p className="activity-footnote muted">
-        Only stops with a usable location are included. Keep times follows the calendar;
-        Shortest drive reorders for less travel. Drafts are saved per agent and date (IST).
-        Activity is for coaching past visits; Routes is for planning the day ahead.
-      </p>
+      <details className="activity-footnote-wrap">
+        <summary className="activity-footnote-toggle">How Routes works</summary>
+        <p className="activity-footnote muted">
+          Only stops with a usable map location are included. Keep times follows the calendar;
+          Shortest drive reorders for less travel. Drafts are saved per agent and date (IST).
+        </p>
+      </details>
     </div>
   );
 }

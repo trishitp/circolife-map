@@ -124,7 +124,12 @@ function departIso(date, hhmm) {
   return new Date(`${date}T${t}:00+05:30`).toISOString();
 }
 
-export default function RoutePlanView({ options = {} }) {
+export default function RoutePlanView({
+  options = {},
+  planSeed,
+  onPlanSeedApplied,
+  onReviewDay,
+}) {
   const [owner, setOwner] = useState('');
   const [ownerQ, setOwnerQ] = useState('');
   const [date, setDate] = useState(todayIST());
@@ -162,6 +167,13 @@ export default function RoutePlanView({ options = {} }) {
   const [unmapped, setUnmapped] = useState([]);
   const [nearbyMeta, setNearbyMeta] = useState(null);
   const stopRefs = useRef(new Map());
+
+  useEffect(() => {
+    if (!planSeed?.owner) return;
+    setOwner(planSeed.owner);
+    if (planSeed.date) setDate(planSeed.date);
+    onPlanSeedApplied?.();
+  }, [planSeed, onPlanSeedApplied]);
 
   const legByTo = useMemo(() => {
     const m = new Map();
@@ -532,7 +544,7 @@ export default function RoutePlanView({ options = {} }) {
 
   return (
     <div className="routes-plan">
-      <div className="toolbar activity-toolbar routes-toolbar">
+      <div className="toolbar activity-toolbar routes-toolbar routes-toolbar-primary">
         <div className="activity-field activity-date-field">
           <label htmlFor="route-date">Date (IST)</label>
           <div className="activity-date-row">
@@ -557,57 +569,62 @@ export default function RoutePlanView({ options = {} }) {
             onChange={(e) => { setDepartTime(e.target.value); markStale(); }}
           />
         </div>
-        <div className="activity-field">
-          <label htmlFor="route-origin">Start from</label>
-          <select
-            id="route-origin"
-            className="input"
-            value={origin?.source || ''}
-            onChange={(e) => onSelectOrigin(e.target.value)}
-            disabled={!originOptions.length}
-          >
-            {!originOptions.length && <option value="">No start point yet</option>}
-            {originOptions.map((o) => (
-              <option key={o.source} value={o.source}>{o.label}</option>
-            ))}
-            {origin?.source === 'saved' && (
-              <option value="saved">{origin.label || 'Saved origin'}</option>
-            )}
-          </select>
-        </div>
-        <div className="activity-field">
-          <label htmlFor="route-radius">Nearby km</label>
-          <input
-            id="route-radius"
-            className="input"
-            type="number"
-            min={0.5}
-            max={25}
-            step={0.5}
-            value={radiusKm}
-            onChange={(e) => setRadiusKm(Number(e.target.value) || 3)}
-          />
-        </div>
-        <div className="activity-field">
-          <label>Order</label>
-          <div className="route-mode-toggle" role="group" aria-label="Route order">
-            <button
-              type="button"
-              className={`btn sm ${lockOrder ? '' : 'ghost'}`}
-              onClick={() => { setLockOrder(true); markStale(); }}
+      </div>
+      <details className="routes-advanced-tools soft-block">
+        <summary>Drive & nearby options</summary>
+        <div className="toolbar activity-toolbar routes-toolbar">
+          <div className="activity-field">
+            <label htmlFor="route-origin">Start from</label>
+            <select
+              id="route-origin"
+              className="input"
+              value={origin?.source || ''}
+              onChange={(e) => onSelectOrigin(e.target.value)}
+              disabled={!originOptions.length}
             >
-              Keep times
-            </button>
-            <button
-              type="button"
-              className={`btn sm ${lockOrder ? 'ghost' : ''}`}
-              onClick={() => { setLockOrder(false); markStale(); }}
-            >
-              Shortest drive
-            </button>
+              {!originOptions.length && <option value="">No start point yet</option>}
+              {originOptions.map((o) => (
+                <option key={o.source} value={o.source}>{o.label}</option>
+              ))}
+              {origin?.source === 'saved' && (
+                <option value="saved">{origin.label || 'Saved origin'}</option>
+              )}
+            </select>
+          </div>
+          <div className="activity-field">
+            <label htmlFor="route-radius">Nearby km</label>
+            <input
+              id="route-radius"
+              className="input"
+              type="number"
+              min={0.5}
+              max={25}
+              step={0.5}
+              value={radiusKm}
+              onChange={(e) => setRadiusKm(Number(e.target.value) || 3)}
+            />
+          </div>
+          <div className="activity-field">
+            <label>Order</label>
+            <div className="route-mode-toggle" role="group" aria-label="Route order">
+              <button
+                type="button"
+                className={`btn sm ${lockOrder ? '' : 'ghost'}`}
+                onClick={() => { setLockOrder(true); markStale(); }}
+              >
+                Keep times
+              </button>
+              <button
+                type="button"
+                className={`btn sm ${lockOrder ? 'ghost' : ''}`}
+                onClick={() => { setLockOrder(false); markStale(); }}
+              >
+                Shortest drive
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </details>
       <PeopleFilters
         options={options}
         userStatus={userStatus}
@@ -626,8 +643,36 @@ export default function RoutePlanView({ options = {} }) {
         showSource
       />
 
-      {owner && (
-        <div className="routes-cta-bar">
+      {owner && onReviewDay && (
+        <div className="walk-action-bar">
+          <span className="muted">
+            Already happened?
+            {' '}
+            Replay check-ins for
+            {' '}
+            {owner}
+            {' '}
+            on
+            {' '}
+            {date}
+            .
+          </span>
+          <button
+            type="button"
+            className="btn ghost sm"
+            onClick={() => onReviewDay({ owner, date })}
+          >
+            Day walk
+          </button>
+        </div>
+      )}
+
+      <div className="routes-cta-bar">
+        {!owner && (
+          <span className="muted routes-cta-hint">Choose a field agent to load meetings and plan the day.</span>
+        )}
+        {owner && (
+        <>
           <button
             type="button"
             className="btn"
@@ -655,8 +700,9 @@ export default function RoutePlanView({ options = {} }) {
           <button type="button" className="btn ghost" onClick={clearPlan}>
             Clear
           </button>
-        </div>
-      )}
+        </>
+        )}
+      </div>
 
       {error && <p className="banner err">{error}</p>}
       {msg && !error && <p className="banner ok">{msg}</p>}

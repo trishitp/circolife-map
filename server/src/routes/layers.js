@@ -10,6 +10,20 @@ export const layers = Router();
 
 const LAYERS = new Set(['leads', 'accounts', 'meetings', 'assets']);
 
+/** Higher zoom → more pins per layer (truncation honesty at city scale). */
+export function layerLimitForZoom(zoom, requested) {
+  const z = Number(zoom);
+  const req = Number(requested);
+  const fallback = Number.isFinite(req) && req > 0 ? req : 8000;
+  if (Number.isFinite(z)) {
+    if (z < 9) return Math.min(fallback, 2500);
+    if (z < 11) return Math.min(fallback, 5000);
+    if (z < 13) return Math.min(Math.max(fallback, 8000), 12000);
+    return Math.min(Math.max(fallback, 12000), 25000);
+  }
+  return Math.min(Math.max(fallback, 1), 25000);
+}
+
 const POINT_COLS = [
   'source_id', 'title', 'owner_name', 'territory', 'status', 'precision',
   'record_ts', 'crm_url', 'extra', 'lat', 'lng', 'address_raw', 'pincode',
@@ -92,7 +106,7 @@ layers.get('/batch', async (req, res) => {
     if (!layerList.length) {
       return res.status(400).json({ error: 'layers=leads,accounts,... required' });
     }
-    const limit = Math.min(Math.max(Number(req.query.limit) || 8000, 1), 25000);
+    const limit = layerLimitForZoom(req.query.zoom, req.query.limit);
     const out = {};
     await Promise.all(layerList.map(async (layer) => {
       out[layer] = await queryLayerFeatures(req, layer, bbox, limit);
@@ -144,7 +158,7 @@ layers.get('/:layer', async (req, res) => {
     if (bbox.length !== 4 || bbox.some((n) => !Number.isFinite(n)))
       return res.status(400).json({ error: 'bbox=minLng,minLat,maxLng,maxLat required' });
 
-    const limit = Math.min(Math.max(Number(req.query.limit) || 8000, 1), 25000);
+    const limit = layerLimitForZoom(req.query.zoom, req.query.limit);
     res.json(await queryLayerFeatures(req, layer, bbox, limit));
   } catch (e) {
     console.error('[layers]', e);

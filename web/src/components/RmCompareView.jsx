@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchActivityCompare } from '../lib/api';
+import { rangeEndingToday } from '../lib/fieldDates';
 import PeopleFilters from './PeopleFilters';
 
 function fmtKm(v) {
@@ -36,7 +37,7 @@ const OPEN_REASON = {
   most_late: 'most late day',
 };
 
-export default function RmCompareView({ options = {}, onOpenWalk }) {
+export default function RmCompareView({ options = {}, onOpenWalk, onPlanRoute }) {
   const range0 = useMemo(() => defaultRange(), []);
   const [from, setFrom] = useState(range0.from);
   const [to, setTo] = useState(range0.to);
@@ -98,9 +99,23 @@ export default function RmCompareView({ options = {}, onOpenWalk }) {
     });
   };
 
+  const setPreset = (days) => {
+    const r = rangeEndingToday(days);
+    setFrom(r.from);
+    setTo(r.to);
+  };
+
   return (
     <div className="activity-compare">
       <div className="toolbar activity-toolbar">
+        <div className="activity-field activity-range-wrap">
+          <span className="activity-field-label">Range (IST)</span>
+          <div className="activity-range-presets" role="group" aria-label="Quick date range">
+            <button type="button" className="btn ghost sm" onClick={() => setPreset(7)}>7d</button>
+            <button type="button" className="btn ghost sm" onClick={() => setPreset(14)}>14d</button>
+            <button type="button" className="btn ghost sm" onClick={() => setPreset(31)}>31d</button>
+          </div>
+        </div>
         <div className="activity-field">
           <label htmlFor="cmp-from">From</label>
           <input id="cmp-from" className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -145,13 +160,43 @@ export default function RmCompareView({ options = {}, onOpenWalk }) {
       )}
 
       {meta && (
-        <p className="muted">
-          {meta.total} field agents · {meta.from} → {meta.to} (IST).
-          Distances use check-in GPS only. Open walk uses the day that matches the current sort.
+        <p className="muted activity-compare-summary">
+          <strong>{meta.total}</strong> field agents · {meta.from} → {meta.to}.
+          Tap a row for day walk, or use Plan for Routes.
         </p>
       )}
 
       <div className={`soft-block activity-table-wrap ${loading ? 'is-loading' : ''}`}>
+        <div className="activity-mobile-list">
+          {!loading && owners.map((row) => (
+            <article key={row.owner} className="activity-mobile-card">
+              <div className="activity-mobile-card-head">
+                <strong>{row.owner}</strong>
+                <span className="muted">{fmtKm(row.path_km)} path</span>
+              </div>
+              <dl className="activity-mobile-kpis">
+                <div><dt>Meetings</dt><dd>{row.meetings}</dd></div>
+                <div><dt>Check-in</dt><dd>{row.checkin_rate}%</dd></div>
+                <div><dt>Late</dt><dd>{row.late_rate}%</dd></div>
+              </dl>
+              <div className="activity-mobile-card-acts">
+                <button type="button" className="btn sm" onClick={() => openWalk(row)}>Day walk</button>
+                {onPlanRoute && (
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    onClick={() => onPlanRoute({
+                      owner: row.owner,
+                      date: row.open_day || row.busiest_day,
+                    })}
+                  >
+                    Plan route
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+        </div>
         <table className="activity-table">
           <thead>
             <tr>
@@ -203,7 +248,7 @@ export default function RmCompareView({ options = {}, onOpenWalk }) {
                     </span>
                   )}
                 </td>
-                <td>
+                <td className="activity-row-actions">
                   <button
                     type="button"
                     className="btn ghost sm"
@@ -212,8 +257,23 @@ export default function RmCompareView({ options = {}, onOpenWalk }) {
                       openWalk(row);
                     }}
                   >
-                    Open walk
+                    Walk
                   </button>
+                  {onPlanRoute && (
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPlanRoute({
+                          owner: row.owner,
+                          date: row.open_day || row.busiest_day,
+                        });
+                      }}
+                    >
+                      Plan
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

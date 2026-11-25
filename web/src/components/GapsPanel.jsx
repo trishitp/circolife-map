@@ -181,11 +181,15 @@ export default function GapsPanel({ onFocusMap, initialSearch = '' }) {
                   {r.crm_url && (
                     <a href={r.crm_url} target="_blank" rel="noreferrer" className="link">CRM</a>
                   )}
-                  {r.territory && onFocusMap && (
+                  {onFocusMap && (r.territory || r.source_id) && (
                     <button
                       type="button"
                       className="link btn-link"
-                      onClick={() => onFocusMap({ territory: r.territory, layer: r.layer })}
+                      onClick={() => onFocusMap({
+                        territory: r.territory,
+                        layer: r.layer,
+                        sourceId: r.source_id,
+                      })}
                     >
                       Map
                     </button>

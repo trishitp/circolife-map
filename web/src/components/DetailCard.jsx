@@ -184,6 +184,12 @@ export default function DetailCard({
       {!isZone && WEAK_PRECISION.has(p.precision) && !isAreaPrecision(p.precision) && TRUST_NEXT[p.precision] && (
         <p className="detail-trust-callout subtle" role="note">{TRUST_NEXT[p.precision]}</p>
       )}
+      {!isZone && WEAK_PRECISION.has(p.precision) && (
+        <p className="detail-crm-playbook muted" role="note">
+          CRM fix: update billing/shipping street + PIN, save, then wait for the next sync
+          (or ask admin for incremental sync).
+        </p>
+      )}
       {rowsToShow.length > 0 && (
         <dl className="meta">
           {rowsToShow.map(([k, v]) => (
@@ -238,12 +244,12 @@ export default function DetailCard({
         )}
         {(p._layer === 'leads' || p._layer === 'accounts') && onViewSources && (
           <button type="button" className="btn ghost sm" onClick={() => onViewSources(p)}>
-            Location sources
+            {WEAK_PRECISION.has(p.precision) ? 'Reconcile sources' : 'Location sources'}
           </button>
         )}
         {WEAK_PRECISION.has(p.precision) && onViewGaps && (
           <button type="button" className="btn ghost sm" onClick={() => onViewGaps(p)}>
-            Improve precision
+            Why unplotted?
           </button>
         )}
         {isAdmin && !isZone && (
@@ -257,7 +263,9 @@ export default function DetailCard({
         )}
         {(p.crmUrl || p.accountCrmUrl) && (
           <a className="cta" href={p.crmUrl || p.accountCrmUrl} target="_blank" rel="noreferrer">
-            {p.crmUrl ? 'Open in CRM →' : 'Open account in CRM →'}
+            {WEAK_PRECISION.has(p.precision)
+              ? 'Fix in CRM →'
+              : (p.crmUrl ? 'Open in CRM →' : 'Open account in CRM →')}
           </a>
         )}
       </div>

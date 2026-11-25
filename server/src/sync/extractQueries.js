@@ -175,3 +175,24 @@ SELECT CAST(c."Id" AS CHAR) AS company_id,
        CAST(c."Service Address" AS CHAR) AS service_address_id,
        CAST(c."Billing Address" AS CHAR) AS billing_address_id
 FROM "Companies" c`;
+
+/**
+ * Restrict a Zoho Analytics export to rows modified after `sinceIso`.
+ * @param {string} sql
+ * @param {string|Date|null|undefined} sinceIso
+ * @param {string} column qualified Modified Time column (default CRM leads style)
+ */
+export function withModifiedSince(sql, sinceIso, column = '"Modified Time"') {
+  if (!sinceIso) return sql;
+  const d = new Date(sinceIso);
+  if (!Number.isFinite(d.getTime())) return sql;
+  // Zoho Analytics filter stamps are typically local (IST) wall-clock strings.
+  const ist = new Date(d.getTime() + 5.5 * 3600 * 1000);
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = `${ist.getUTCFullYear()}-${pad(ist.getUTCMonth() + 1)}-${pad(ist.getUTCDate())} ${pad(ist.getUTCHours())}:${pad(ist.getUTCMinutes())}:${pad(ist.getUTCSeconds())}`;
+  const trimmed = String(sql).trim().replace(/;\s*$/, '');
+  if (/\bWHERE\b/i.test(trimmed)) {
+    return `${trimmed}\n  AND ${column} > '${stamp}'`;
+  }
+  return `${trimmed}\nWHERE ${column} > '${stamp}'`;
+}

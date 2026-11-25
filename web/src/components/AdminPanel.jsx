@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  fetchAdminDashboard, fetchAdminJob, triggerSync, triggerAssetsSync, triggerRegeocode,
+  fetchAdminDashboard, fetchAdminJob, triggerSync, triggerIncrementalSync, triggerAssetsSync, triggerRegeocode,
   clearFailedCache, clearAllCache, refreshTerritories, overridePoint,
   bulkOverride, searchPoints, fetchCacheSample, triggerRebuildDiscrepancies,
   fetchZohoStatus, refreshZohoToken, exchangeZohoCode, saveMapMarkerStyle,
@@ -360,8 +360,30 @@ export default function AdminPanel({ me, markerStyle, onMarkerStyle }) {
 
           <section className="soft-block">
             <h2>Operations</h2>
+            <p className="muted admin-sync-age">
+              Last successful sync:{' '}
+              <strong>
+                {dash.lastSuccessfulSyncAt
+                  ? new Date(dash.lastSuccessfulSyncAt).toLocaleString('en-IN', {
+                    timeZone: 'Asia/Kolkata',
+                  })
+                  : 'never'}
+              </strong>
+              {dash.lastSuccessfulSyncAt && (
+                <span>
+                  {' '}
+                  (
+                  {Math.max(0, Math.round((Date.now() - new Date(dash.lastSuccessfulSyncAt).getTime()) / 36e5))}
+                  h ago, IST)
+                </span>
+              )}
+            </p>
             <div className="btn-row">
               <button type="button" className="btn" disabled={job?.status === 'running'}
+                onClick={() => run('Incremental sync', triggerIncrementalSync)}>
+                Incremental sync
+              </button>
+              <button type="button" className="btn ghost" disabled={job?.status === 'running'}
                 onClick={() => run('Full sync', triggerSync)}>
                 Run full sync
               </button>

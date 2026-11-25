@@ -43,19 +43,26 @@ export default function MapChromeShell({
   };
 
   const layerN = activeLayerCount ?? active?.size ?? 0;
+  const truncated = (mapTruncatedLayers || []).length > 0;
   const totalLabel = (() => {
     if (mapRecordTotal == null) return null;
     const n = mapRecordTotal.toLocaleString('en-IN');
     const stacks = mapPinStats?.colocatedStacks;
     const positions = mapPinStats?.mapPinPositions;
+    let base;
     if (stacks > 0 && positions != null && positions !== mapRecordTotal) {
-      return `${n} ACs · ${positions.toLocaleString('en-IN')} map spots`;
+      base = `${n} ACs · ${positions.toLocaleString('en-IN')} map spots`;
+    } else {
+      const pins = mapPinStats?.renderedPins;
+      if (pins != null && pins !== mapRecordTotal) {
+        base = `${n} records · ${pins.toLocaleString('en-IN')} pins`;
+      } else {
+        base = `${n} in view`;
+      }
     }
-    const pins = mapPinStats?.renderedPins;
-    if (pins != null && pins !== mapRecordTotal) {
-      return `${n} records · ${pins.toLocaleString('en-IN')} pins`;
-    }
-    return `${n} in view`;
+    if (truncated) return `${base} · capped`;
+    if (mapClusterMode) return `${base} · grouped`;
+    return base;
   })();
 
   return (

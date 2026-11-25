@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { parse } from 'csv-parse/sync';
 import { q } from '../db.js';
 import { cfg } from '../config.js';
-import { runFullSync, runRegeocode, runAssetsSync } from '../sync/sync.js';
+import { runFullSync, runIncrementalSync, runRegeocode, runAssetsSync } from '../sync/sync.js';
 import { refreshTerritoryCentroids } from '../geocode/pipeline.js';
 import { rebuildDiscrepancies } from '../discrepancy/engine.js';
 import { exchangeAuthCode, getAccessToken, zohoAuthStatus } from '../zoho/analyticsClient.js';
@@ -72,6 +72,11 @@ admin.get('/dashboard', async (_req, res) => {
   const lastRuns = await q(`
     SELECT id, kind, status, started_at, finished_at, duration_ms, stats, error
     FROM sync_runs ORDER BY started_at DESC LIMIT 10`);
+  const lastOk = await q(`
+    SELECT finished_at FROM sync_runs
+    WHERE status = 'ok' AND kind IN ('full', 'sync', 'incremental')
+      AND finished_at IS NOT NULL
+    ORDER BY finished_at DESC LIMIT 1`);
   const pins = await q(`SELECT COUNT(*)::int AS n FROM pincode_centroids`);
   const terr = await q(`SELECT COUNT(*)::int AS n FROM territory_centroids`);
   const bdmPins = await assignmentSummary();
@@ -81,6 +86,7 @@ admin.get('/dashboard', async (_req, res) => {
     cache: cache.rows[0],
     unplottable: unplot.rows,
     lastRuns: lastRuns.rows,
+    lastSuccessfulSyncAt: lastOk.rows[0]?.finished_at || null,
     pincodeCentroids: pins.rows[0].n,
     territoryCentroids: terr.rows[0].n,
     bdmPincodeAssignments: bdmPins,
@@ -140,6 +146,16 @@ admin.post('/rebuild-discrepancies', async (_req, res) => {
 admin.post('/sync', async (_req, res) => {
   try {
     const j = await startJob('full', () => runFullSync());
+    res.status(202).json(j);
+  } catch (e) {
+    res.status(e.code === 'BUSY' ? 409 : 500).json({ error: e.message });
+  }
+});
+
+/** Incremental CRM pull (Modified Time) + assets + discrepancy rebuild. */
+admin.post('/sync/incremental', async (_req, res) => {
+  try {
+    const j = await startJob('incremental', () => runIncrementalSync());
     res.status(202).json(j);
   } catch (e) {
     res.status(e.code === 'BUSY' ? 409 : 500).json({ error: e.message });

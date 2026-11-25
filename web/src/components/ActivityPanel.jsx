@@ -1,14 +1,47 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import RmWalkView from './RmWalkView';
 import RmCompareView from './RmCompareView';
 
-export default function ActivityPanel({ options = {} }) {
-  const [mode, setMode] = useState('compare');
+const MODE_KEY = 'circo.activityMode';
+
+function loadMode() {
+  try {
+    const v = localStorage.getItem(MODE_KEY);
+    return v === 'walk' ? 'walk' : 'compare';
+  } catch {
+    return 'compare';
+  }
+}
+
+export default function ActivityPanel({
+  options = {},
+  walkSeed: externalWalkSeed,
+  onWalkSeedApplied,
+  onPlanRoute,
+}) {
+  const [mode, setMode] = useState(loadMode);
   const [walkSeed, setWalkSeed] = useState({ owner: '', date: '' });
+
+  useEffect(() => {
+    if (!externalWalkSeed?.owner) return;
+    setWalkSeed({
+      owner: externalWalkSeed.owner,
+      date: externalWalkSeed.date || '',
+    });
+    setMode('walk');
+    onWalkSeedApplied?.();
+  }, [externalWalkSeed, onWalkSeedApplied]);
+
+  const setModePersist = (next) => {
+    setMode(next);
+    try {
+      localStorage.setItem(MODE_KEY, next);
+    } catch { /* */ }
+  };
 
   const openWalk = useCallback(({ owner, date }) => {
     setWalkSeed({ owner: owner || '', date: date || '' });
-    setMode('walk');
+    setModePersist('walk');
   }, []);
 
   return (
@@ -17,17 +50,17 @@ export default function ActivityPanel({ options = {} }) {
         <div>
           <h1>Activity</h1>
           <p>
-            Compare field teams, then open a single day’s walk to coach check-ins
-            against the planned meetings.
+            Review check-ins against meetings — compare teams or replay one day on the map.
           </p>
         </div>
-        <div className="activity-mode-tabs" role="tablist" aria-label="Activity mode">
+        <div className="activity-head-actions">
+          <div className="activity-mode-tabs" role="tablist" aria-label="Activity mode">
           <button
             type="button"
             role="tab"
             aria-selected={mode === 'compare'}
             className={`btn ${mode === 'compare' ? '' : 'ghost'}`}
-            onClick={() => setMode('compare')}
+            onClick={() => setModePersist('compare')}
           >
             Compare
           </button>
@@ -36,29 +69,47 @@ export default function ActivityPanel({ options = {} }) {
             role="tab"
             aria-selected={mode === 'walk'}
             className={`btn ${mode === 'walk' ? '' : 'ghost'}`}
-            onClick={() => setMode('walk')}
+            onClick={() => setModePersist('walk')}
           >
             Day walk
           </button>
+          </div>
+          {onPlanRoute && (
+            <button
+              type="button"
+              className="btn ghost sm field-workflow-link"
+              onClick={() => onPlanRoute({})}
+            >
+              Plan ahead → Routes
+            </button>
+          )}
         </div>
       </div>
 
       {mode === 'compare' && (
-        <RmCompareView options={options} onOpenWalk={openWalk} />
+        <RmCompareView
+          options={options}
+          onOpenWalk={openWalk}
+          onPlanRoute={onPlanRoute}
+        />
       )}
       {mode === 'walk' && (
         <RmWalkView
           options={options}
           initialOwner={walkSeed.owner}
           initialDate={walkSeed.date}
+          onPlanRoute={onPlanRoute}
         />
       )}
 
-      <p className="activity-footnote muted">
-        A visit is late when the check-in is more than 15 minutes after the scheduled start.
-        Distances are straight-line from check-in GPS, not road distance. Nearby check-ins
-        (about 50 m) share a pin. Dates and times use India Standard Time.
-      </p>
+      <details className="activity-footnote-wrap">
+        <summary className="activity-footnote-toggle">How Activity works</summary>
+        <p className="activity-footnote muted">
+          Late = check-in more than 15 minutes after the scheduled start.
+          Distances are straight-line from check-in GPS, not road distance.
+          Check-ins within ~50 m share one map pin. All dates and times are IST.
+        </p>
+      </details>
     </div>
   );
 }

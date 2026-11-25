@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import MapView from './components/MapView';
 import FilterPanel, {
   activeFilterEntries, describeFilter, FILTER_LABELS,
@@ -118,6 +118,8 @@ export default function App() {
   });
   const [mapViewport, setMapViewport] = useState(null);
   const [fieldMode, setFieldModeState] = useState(() => isFieldMode());
+  const [routesPlanSeed, setRoutesPlanSeed] = useState(null);
+  const [activityWalkSeed, setActivityWalkSeed] = useState(null);
   const [discSeverityPreset, setDiscSeverityPreset] = useState('');
   const mapRef = useRef(null);
   const [lastSyncAt, setLastSyncAt] = useState(null);
@@ -285,6 +287,22 @@ export default function App() {
     setTab(id);
   };
 
+  const goPlanRoute = useCallback(({ owner, date } = {}) => {
+    if (owner) setRoutesPlanSeed({ owner, date: date || undefined });
+    setPanelOpen(false);
+    setMoreOpen(false);
+    setMapMenu(null);
+    setTab('routes');
+  }, []);
+
+  const goActivityWalk = useCallback(({ owner, date } = {}) => {
+    if (owner) setActivityWalkSeed({ owner, date: date || undefined });
+    setPanelOpen(false);
+    setMoreOpen(false);
+    setMapMenu(null);
+    setTab('activity');
+  }, []);
+
   const pickInsight = (m) => {
     setInsightMode(m);
     if (m === 'off') setOppOpen(false);
@@ -339,10 +357,10 @@ export default function App() {
     setPanelOpen(false);
   };
 
-  const focusFromGap = ({ layer, sourceId }) => {
+  const focusFromGap = ({ layer, sourceId, territory } = {}) => {
     setTab('map');
-    // Clear filters so the focused point is not hidden
-    setFilters({});
+    // Prefer territory filter when jumping from Gaps (many rows are unplottable).
+    setFilters(territory ? { territory: [territory] } : {});
     if (layer) setActive(new Set([layer]));
     if (sourceId && layer) {
       setFocusRequest({ layer, id: String(sourceId), nonce: Date.now() });
@@ -536,6 +554,15 @@ export default function App() {
               />
             </div>
           )}
+          {tab === 'map' && mapRecordTotal === 0 && !loading && (
+            <div className="map-empty-state soft-block" role="status">
+              <strong>No pins in this view</strong>
+              <p>Zoom out, clear filters, or turn on another layer. Assets are on by default around Thane.</p>
+              <button type="button" className="btn ghost sm" onClick={() => { setFilters({}); setPanelOpen(true); }}>
+                Open filters
+              </button>
+            </div>
+          )}
           <MapChromeShell
             active={active}
             toggle={toggle}
@@ -689,8 +716,22 @@ export default function App() {
         />
       </div>
 
-      {tab === 'activity' && <ActivityPanel options={options} />}
-      {tab === 'routes' && <RoutesPanel options={options} />}
+      {tab === 'activity' && (
+        <ActivityPanel
+          options={options}
+          walkSeed={activityWalkSeed}
+          onWalkSeedApplied={() => setActivityWalkSeed(null)}
+          onPlanRoute={goPlanRoute}
+        />
+      )}
+      {tab === 'routes' && (
+        <RoutesPanel
+          options={options}
+          planSeed={routesPlanSeed}
+          onPlanSeedApplied={() => setRoutesPlanSeed(null)}
+          onReviewDay={goActivityWalk}
+        />
+      )}
       {tab === 'disc' && (
         <DiscrepanciesPanel
           onFocusMap={focusFromGap}

@@ -49,8 +49,9 @@ function isNcrPincode(pin) {
 /** Reject centroids that contradict known postal regions (bad rows in legacy CSV). */
 export function pinCentroidPlausible(pin, lat, lng) {
   if (!inIndia(lat, lng)) return false;
+  // Legacy duplicate template dumped across unrelated UP pins — never accept.
+  if (nearCoord({ lat, lng }, BAD_PIN_TEMPLATE)) return false;
   if (isNcrPincode(pin)) {
-    if (nearCoord({ lat, lng }, BAD_PIN_TEMPLATE)) return false;
     if (/^2013(0[1-9]|1[0-8])$/.test(pin)) {
       return lat >= 28.4 && lat <= 28.85 && lng >= 77.15 && lng <= 77.65;
     }
