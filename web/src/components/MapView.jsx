@@ -72,11 +72,6 @@ const PIN_OPACITY = [
   'pincode', 0.55, 'territory', 0.4, 'inherited', 0.75, 1,
 ];
 
-const PIN_ICON_SCALE = [
-  'match', ['get', 'precision'],
-  'pincode', 0.88, 'territory', 0.8, 'inherited', 0.92, 1,
-];
-
 function applySelectionStyle(m, precision) {
   if (!m?.getLayer('selection-ring')) return;
   const { stroke, fill } = selectionColors(precision);
@@ -172,11 +167,7 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
       source: srcId,
       layout: {
         'icon-image': 'ac-pin',
-        'icon-size': [
-          '*',
-          ['interpolate', ['linear'], ['zoom'], 4, 0.28, 8, 0.38, 12, 0.52, 16, 0.7],
-          PIN_ICON_SCALE,
-        ],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 4, 0.28, 8, 0.38, 12, 0.52, 16, 0.7],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-anchor': 'center',
@@ -204,11 +195,7 @@ function ensureOverlay(m, layer, color, wired, onSelect, selectedId, indexes) {
       source: srcId,
       layout: {
         'icon-image': `drop-pin-${layer}`,
-        'icon-size': [
-          '*',
-          ['interpolate', ['linear'], ['zoom'], 4, 0.32, 8, 0.42, 12, 0.58, 16, 0.78],
-          PIN_ICON_SCALE,
-        ],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 4, 0.32, 8, 0.42, 12, 0.58, 16, 0.78],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'icon-anchor': 'bottom',
